@@ -61,30 +61,8 @@
             border-bottom: 1px solid var(--line);
         }
 
-        .logo-hex {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            background: var(--grad);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--bg-deep);
-            font-size: 0.9rem;
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 6px 14px rgba(189, 147, 249, 0.3);
-            flex-shrink: 0;
-            overflow: hidden;
-        }
-
-        .logo-hex img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .topbar-titles { line-height: 1.2; }
-        .topbar-titles .t1 { font-weight: 800; font-size: 0.9rem; }
-        .topbar-titles .t2 { font-size: 0.68rem; color: var(--comment); font-weight: 500; }
+        .topbar-brand { display: flex; align-items: center; }
+        .topbar-brand img { height: 30px; width: auto; object-fit: contain; }
 
         main { flex-grow: 1; padding: 0.6rem 0.6rem 1rem; max-width: 660px; margin: 0 auto; width: 100%; }
 
@@ -448,11 +426,7 @@
 
 <body>
     <header class="topbar">
-        <div class="logo-hex"><img src="https://i.ibb.co/Y477373k/IMG-20260817-154226.png" alt="CineFlow"></div>
-        <div class="topbar-titles">
-            <div class="t1">CineFlow</div>
-            <div class="t2">File Selector</div>
-        </div>
+        <div class="topbar-brand"><img src="https://i.ibb.co/BHYKmvBH/Cine-Flow-barand.png" alt="CineFlow"></div>
     </header>
 
     <main>
