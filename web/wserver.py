@@ -312,6 +312,7 @@ async def qbittorrent_proxy(path: str = "", request: Request = None):
 
 @app.exception_handler(Exception)
 async def page_not_found(_, exc):
+    LOGGER.error("Unhandled exception in web server", exc_info=exc)
     return HTMLResponse(
         f"<h1>404: Task not found! Mostly wrong input. <br><br>Error: {exc}</h1>",
         status_code=404,
