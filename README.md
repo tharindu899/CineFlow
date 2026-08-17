@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="220" src="https://i.ibb.co/BHYKmvBH/Cine-Flow-barand.png" alt="CineFlow Logo">
+  <img width="480" src="https://i.ibb.co/BHYKmvBH/Cine-Flow-barand.png" alt="CineFlow Logo">
 </p>
 
 <p align="center">
