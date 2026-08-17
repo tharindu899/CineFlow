@@ -10,7 +10,8 @@ git+https://github.com/NBBotz/IMDBKit
 beautifulsoup4
 cloudscraper
 dnspython
-fastapi
+fastapi==0.141.1
+starlette==1.6.0
 feedparser
 google-api-python-client
 google-auth-httplib2
