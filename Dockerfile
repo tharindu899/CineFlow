@@ -1,10 +1,24 @@
-FROM mysterysd/wzmlx:v3
+FROM ghcr.io/astral-sh/uv:debian-slim
 
-WORKDIR /usr/src/app
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV LANG=en_US.UTF-8
+ENV PATH="/app/.venv/bin:$PATH"
 
-COPY requirements.txt .
-RUN uv pip install --python /wzvenv/bin/python --no-cache-dir -r requirements.txt
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+	bash \
+        git \
+        curl \
+        ca-certificates \
+        locales && \
+    locale-gen en_US.UTF-8 && \
+    rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
 COPY . .
-
-ENTRYPOINT ["bash", "start.sh"]
+RUN uv lock
+RUN uv sync --locked
+RUN chmod +x start.sh
+CMD ["bash", "start.sh"]

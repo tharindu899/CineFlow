@@ -1,4 +1,1 @@
-#!/bin/bash
-
-python update.py
-exec python -m bot
+uv run update.py && uv run -m Backend
