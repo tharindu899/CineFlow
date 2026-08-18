@@ -509,7 +509,7 @@ async def get_manifest(token: str, token_data: dict = Depends(verify_token)):
         "id": f"telegram.media.{token[:8]}",
         "version": addon_version,
         "name": addon_name,
-        "logo": "https://iili.io/CsmO1HJ.md.png",
+        "logo": "https://iili.io/CsmODDQ.md.png",
         "description": addon_desc,
         "types": ["movie", "series"],
         "resources": resources,
