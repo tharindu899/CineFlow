@@ -1,4 +1,5 @@
 from asyncio import sleep
+from pyrogram.enums import ButtonStyle
 
 from .. import task_dict, task_dict_lock, user_data, multi_tags
 from ..core.tg_client import Config
@@ -126,7 +127,7 @@ def create_cancel_buttons(is_sudo, user_id=""):
             buttons.data_button("All Added Tasks", f"canall bot ms {user_id}")
         else:
             buttons.data_button("My Tasks", f"canall user ms {user_id}")
-    buttons.data_button("Close", f"canall close ms {user_id}")
+    buttons.data_button("Close", f"canall close ms {user_id}", style=ButtonStyle.DANGER)
     return buttons.build_menu(2)
 
 
@@ -152,8 +153,8 @@ async def cancel_all_update(_, query):
     is_sudo = await CustomFilters.sudo("", query)
     if not is_sudo and user_id and user_id != query.from_user.id:
         await query.answer("Not Yours!", show_alert=True)
-    else:
-        await query.answer()
+        return
+    await query.answer()
     if data[1] == "close":
         await delete_message(reply_to, message)
     elif data[1] == "back":
@@ -167,9 +168,13 @@ async def cancel_all_update(_, query):
         await edit_message(message, "Choose tasks to cancel!", button)
     elif data[1] == "ms":
         buttons = button_build.ButtonMaker()
-        buttons.data_button("Yes!", f"canall {data[2]} confirm {user_id}")
+        buttons.data_button(
+            "Yes!", f"canall {data[2]} confirm {user_id}", style=ButtonStyle.SUCCESS
+        )
         buttons.data_button("Back", f"canall back confirm {user_id}")
-        buttons.data_button("Close", f"canall close confirm {user_id}")
+        buttons.data_button(
+            "Close", f"canall close confirm {user_id}", style=ButtonStyle.DANGER
+        )
         button = buttons.build_menu(2)
         await edit_message(
             message, f"Are you sure you want to cancel all {data[2]} tasks", button

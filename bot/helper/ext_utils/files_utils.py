@@ -1,7 +1,6 @@
 from aioshutil import rmtree as aiormtree, move
 from asyncio import create_subprocess_exec, sleep, wait_for
 from asyncio.subprocess import PIPE
-from contextlib import suppress
 from psutil import disk_usage
 from os import path as ospath, readlink, walk
 from re import I, escape, search as re_search, split as re_split
@@ -94,7 +93,7 @@ FIRST_SPLIT_REGEX = (
     r"\.part0*1\.rar$|\.7z\.0*1$|\.zip\.0*1$|^(?!.*\.part\d+\.rar$).*\.rar$"
 )
 
-SPLIT_REGEX = r"\.r\d+$|\.7z\.\d+$|\.z\d+$|\.zip\.\d+$|\.part\d+\.rar$"
+SPLIT_REGEX = r"\.\w+\.\d{3}$|\.r\d+$|\.7z\.\d+$|\.z\d+$|\.zip\.\d+$|\.part\d+\.rar$"
 
 
 def is_first_archive_split(file):
@@ -132,9 +131,8 @@ async def clean_download(opath):
 
 async def clean_all():
     await TorrentManager.remove_all()
-    with suppress(Exception):
-        LOGGER.info("Cleaning Download Directory")
-        await aiormtree(DOWNLOAD_DIR, ignore_errors=True)
+    LOGGER.info("Cleaning Download Directory")
+    await cmd_exec(["rm", "-rf", DOWNLOAD_DIR])
     await aiomakedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
@@ -218,6 +216,8 @@ def get_mime_type(file_path):
 
 async def remove_excluded_files(fpath, ee):
     for root, _, files in await sync_to_async(walk, fpath):
+        if root.strip().endswith("/yt-dlp-thumb"):
+            continue
         for f in files:
             if f.strip().lower().endswith(tuple(ee)):
                 await remove(ospath.join(root, f))
@@ -277,6 +277,7 @@ async def split_file(f_path, split_size, listener):
     out_path = f"{f_path}."
     if listener.is_cancelled:
         return False
+    # pread parallel split
     listener.subproc = await create_subprocess_exec(
         "split",
         "--numeric-suffixes=1",
@@ -409,6 +410,7 @@ class SevenZ:
             f"-v{split_size}b",
             "a",
             "-mx=0",
+            "-mmt=on",
             f"-p{pswd}",
             up_path,
             dl_path,
@@ -418,12 +420,12 @@ class SevenZ:
         ]
         if self._listener.is_leech and int(size) > self._listener.split_size:
             if not pswd:
-                del cmd[4]
+                del cmd[5]
             LOGGER.info(f"Zip: orig_path: {dl_path}, zip_path: {up_path}.0*")
         else:
             del cmd[1]
             if not pswd:
-                del cmd[3]
+                del cmd[4]
             LOGGER.info(f"Zip: orig_path: {dl_path}, zip_path: {up_path}")
         if self._listener.is_cancelled:
             return False

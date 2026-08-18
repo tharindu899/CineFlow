@@ -1,155 +1,322 @@
 <p align="center">
-  <img width="220" src="https://i.ibb.co/670939S4/Cine-Flow-icon.png" alt="CineFlow Logo">
+   <img src="docs/WZML-X.png" alt="WZML-X logo" width="420">
+</p>
+
+<h1 align="center">WZML-X</h1>
+
+<p align="center">
+   Telegram mirroring and leeching platform with a container-based runtime, a lightweight web UI, and a configurable transfer pipeline.
 </p>
 
 <p align="center">
-  <b>Modern Telegram Mirror/Leech Bot</b><br>
-  <i>Wzml-X is a powerful, modern Telegram bot for mirroring, leeching, and managing downloads to Google Drive, Telegram, or any RClone-supported cloud. Built for speed, reliability, and a beautiful user experience.</i>
+   <a href="https://github.com/cineflow-web/CineFlow_WZML-X">
+      <img src="https://img.shields.io/github/stars/cineflow-web/CineFlow_WZML-X?style=for-the-badge&logo=github&label=Stars" alt="Stars">
+   </a>
+
+   <a href="https://github.com/cineflow-web/CineFlow_WZML-X/search?l=python">
+      <img src="https://img.shields.io/github/languages/top/cineflow-web/CineFlow_WZML-X?style=for-the-badge&logo=python&label=Python" alt="Python">
+   </a>
+
+   <a href="https://github.com/cineflow-web/CineFlow_WZML-X/blob/main/docker-compose.yml">
+      <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Compose">
+   </a>
+
+   <a href="https://t.me/CineFlow_Update">
+      <img src="https://img.shields.io/badge/Telegram-Community-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram">
+   </a>
+
+   <a href="https://github.com/cineflow-web/CineFlow_WZML-X/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/cineflow-web/CineFlow_WZML-X?style=for-the-badge&label=License" alt="License">
+   </a>
+
+   <a href="https://github.com/cineflow-web/CineFlow_WZML-X/commits/main">
+      <img src="https://img.shields.io/github/last-commit/cineflow-web/CineFlow_WZML-X?style=for-the-badge&label=Last%20Commit" alt="Last Commit">
+   </a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/tharindu899/WZML-X"><img src="https://img.shields.io/github/stars/tharindu899/WZML-X?style=flat-square&color=yellow&logo=github"/></a>
-  <a href="https://github.com/tharindu899/WZML-X"><img src="https://img.shields.io/github/forks/tharindu899/WZML-X?style=flat-square&color=blue&logo=github"/></a>
-  <a href="https://t.me/CineFlow_Update"><img src="https://img.shields.io/badge/Telegram-Channel-blue?style=flat-square&logo=telegram"/></a>
-  <a href="https://t.me/CineFlow_Update"><img src="https://img.shields.io/badge/Support-Group-blueviolet?style=flat-square&logo=telegram"/></a>
-  <a href="https://github.com/tharindu899/WZML-X/blob/main/LICENSE"><img src="https://img.shields.io/github/license/tharindu899/WZML-X?style=flat-square&color=success"/></a>
-</p>
+## Index
 
----
+<details open>
+   <summary>Table of Contents <kbd>Click Here</kbd></summary>
 
-## 🚀 Features
-
-<details>
-  <summary><b>View all features</b></summary>
-
-- Multi-source Download: Supports torrents (qBittorrent, Aria2c), direct links, Mega.nz, YouTube (yt-dlp), devuploads, and more
-- Flexible Uploads: Upload to Google Drive, Telegram, RClone remotes, or supported DDL sites
-- Advanced File Management: Archive/extract (zip, rar, 7z), split/join files, rename, and more
-- User & Sudo Controls: Per-user settings, limits, and admin controls
-- Status & Queue System: Real-time status, unlimited tasks, and queue management
-- RSS Automation: Auto-download and filter RSS feeds
-- Database Support: MongoDB for persistent settings, tasks, and user data
-- Docker Ready: Easy deployment with Docker & docker-compose
-- Extensive Configurability: All features and limits are configurable via environment or config file
-- Multi-cloud: RClone integration for any supported cloud (GDrive, OneDrive, Dropbox, etc)
-- Multi-bot & Multi-user: Designed for groups, channels, and private use
-- Token/Multi-Shortener Support: Support for token based usage and multi-shortener services
-- **Actively Maintained**: By CineFlow & Team.
+   - [At a Glance](#at-a-glance)
+   - [Why Use It](#why-use-it)
+   - [What It Covers](#what-it-covers)
+   - [How It Runs](#how-it-runs)
+   - [Deployment](#deployment)
+   - [Configuration](#configuration)
+   - [Project Layout](#project-layout)
+   - [Documentation](#documentation)
+   - [Support](#support)
+   - [Credits](#credits)
+   - [License](#license)
 </details>
 
----
+## At a Glance
 
-## 🖥️ Live Demo & Public Mirror/Leech Group
+| Area | Details |
+|---|---|
+| Runtime | Python Telegram bot + web UI |
+| Deployment | Docker & Docker Compose (buildx) |
+| Required config | `BOT_TOKEN`, `TELEGRAM_API`, `TELEGRAM_HASH`, `OWNER_ID`, `DATABASE_URL` |
+| License | [LICENSE](LICENSE) |
 
- - Access All Services: [Click here](https://t.me/CineFlow_Update)
+## Why Use It
 
----
+WZML-X is built for users who want a single bot stack that can mirror, leech, manage files, and expose a simple web-based selection flow without stitching together multiple tools. The README focuses on what you need to deploy it quickly, understand the moving parts, and tune the behavior safely.
 
-## 📦 Deploy Methods
+## What It Covers
 
-- [Google Collab Deploy](https://colab.research.google.com/drive/1A9h93Qtyrk1Rf2902CXHOM0mTMah1AQ9?authuser=2)
+| Capability | Outcome |
+|---|---|
+| Mirroring | Send files to Telegram with a controllable pipeline |
+| Leeching | Deliver files in the format you prefer, including document and media workflows |
+| File selection UI | Review and select torrent / NZB / upload contents before finalizing |
+| Multi-source downloads | Use qBittorrent, Aria2, JDownloader, Mega, NZB, and yt-dlp integrations |
+| Storage and upload paths | Push content to Google Drive, Rclone, Mega, and other supported routes |
+| Automation | Limit tasks, tune queues, and manage startup updates from one config layer |
 
----
+## How It Runs
 
-## ⚙️ Configuration
-
-All configuration is done via `config.env` (or environment variables). See `config_sample.py` for all options and detailed comments.
-
-<details>
-  <summary><b>Click to view all config variables</b></summary>
-
-### Required
-- `BOT_TOKEN`: Telegram Bot Token from @BotFather
-- `OWNER_ID`: Telegram User ID of the bot owner
-- `TELEGRAM_API`: Telegram API ID from https://my.telegram.org
-- `TELEGRAM_HASH`: Telegram API Hash from https://my.telegram.org
-
-### Optional (most common)
-- `DATABASE_URL`: MongoDB connection string
-- `DOWNLOAD_DIR`: Local download directory
-- `AUTHORIZED_CHATS`: Space-separated list of allowed user/group IDs
-- `SUDO_USERS`: Space-separated list of sudo user IDs
-- `DEFAULT_UPLOAD`: `gd` (Google Drive), `rc` (RClone), or `ddl` (DDL sites)
-- `GDRIVE_ID`: Google Drive folder/TeamDrive ID or `root`
-- `RCLONE_PATH`: Default rclone path (e.g. `remote:path`)
-- `RCLONE_FLAGS`: RClone flags (see [RClone Flags](https://rclone.org/flags/))
-- `RCLONE_SERVE_URL`: URL for rclone serve (e.g. `http://myip:port`)
-- `RCLONE_SERVE_PORT`: Port for rclone serve (default: 8080)
-- `RCLONE_SERVE_USER`/`RCLONE_SERVE_PASS`: Auth for rclone serve
-- `LEECH_LOG_ID`/`MIRROR_LOG_ID`: Chat IDs for logs
-- `QUEUE_ALL`/`QUEUE_DOWNLOAD`/`QUEUE_UPLOAD`: Task queue limits
-- `DAILY_TASK_LIMIT`, `DAILY_MIRROR_LIMIT`, `DAILY_LEECH_LIMIT`: User limits
-- `YT_DLP_OPTIONS`: Default yt-dlp options (see [yt-dlp options](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184))
-- `EXTENSION_FILTER`: Space-separated list of file extensions to block
-- `SAFE_MODE`: Hide links/files in group, send to PM
-- `TIMEZONE`: Timezone (default: Asia/Kolkata)
-
-...and many more! See `config_sample.py`.
-
-</details>
-
----
-
-## 📝 Usage
-
-- Start the bot on Telegram and use `/help` for all commands.
-- All commands can be set automatically with the `SET_COMMANDS` variable.
-- For advanced usage, see the Bot Commands below.
-
----
-## 🤖 Bot Commands
+Deploy with Docker and provide the required configuration values. The container takes care of the runtime path, so users only need to build or start the image and set their settings.
 
 <details>
-  <summary>Click to view all bot commands</summary>
+   <summary>What you need <kbd>Click Here</kbd></summary>
 
-```
-mirror - or /m Mirror
-leech - or /l Leech
-qbmirror - or /qm Mirror torrent using qBittorrent
-qbleech - or /ql Leech torrent using qBittorrent
-jdmirror - or /jm Mirror files using JDownloader
-jdleech - or /jl Leech files using JDownloader
-ytdl - or /y Mirror yt-dlp supported link
-ytdlleech - or /yl Leech through yt-dlp supported link
-clone - Copy file/folder to Drive
-count - Count file/folder from Drive
-select - Select files from torrent
-list - Search files in Drive
-search - Search for torrents with API
-mediainfo - Get Mediainfo of the Target Media
-rss - Rss menu
-usetting - User settings
-status - Get Mirror Status message
-forcestart - Force start from queued task
-cancel - Cancel a task
-cancelall - Cancel all tasks
-login - Login to Bot
-ping - Ping the Bot
-stats - Bot Usage Stats
-speedtest - Check Internet Speed
-help - All cmds with description
-bsetting - Bot settings
-del - Delete file/folder from Drive
-restart - Restart the Bot
-restartses - Restart User Sessions
-```
-
+   - Docker installed
+   - Your Telegram bot token and Telegram API credentials
+   - A MongoDB connection string
+   - The optional service credentials you want to enable, such as Drive, Rclone, Mega, JDownloader, or SABnzbd
 </details>
 
----
+## Deployment
 
-## 🏷️ Credits & Authors
-- **CineFlow** ([Telegram](https://t.me/CineFlow_Update), [GitHub](https://github.com/tharindu899))
-- Base Repo is [WZML-X](https://github.com/SilentDemonSD/WZML-X)
+<details open>
+   <summary>VPS / Dedicated Server (Recommended)</summary>
 
----
+   ```bash
+   git clone https://github.com/cineflow-web/CineFlow_WZML-X.git
+   cd CineFlow_WZML-X
+   cp config_sample.py config.py
+   # Edit config.py with your values
+   docker buildx compose up -d
+   ```
 
-## 📄 License
+   The bot runs behind a Cloudflare quick tunnel by default. Check the tunnel URL:
 
-This project is licensed under the [MIT License](LICENSE).
+   ```bash
+   docker compose logs tunnel
+   ```
 
----
+   You'll see a `https://*.trycloudflare.com` URL — that's your bot's web UI.
 
-<p align="center">
-  <b>Made with ❤️ by CineFlow</b>
-</p>
+   To stop:
+
+   ```bash
+   docker buildx compose down
+   ```
+</details>
+
+<details>
+   <summary>VPS with VPN (Gluetun)</summary>
+
+   1. Uncomment the `gluetun` service in `docker-compose.yml`
+   2. Fill in your VPN provider credentials
+   3. Set `network_mode: "service:gluetun"` on the `app` service
+   4. Start:
+
+   ```bash
+   docker buildx compose up -d
+   ```
+
+   All traffic (including the cloudflared tunnel) routes through the VPN.
+</details>
+
+<details>
+   <summary>Multi-Instance (Multiple Bots)</summary>
+
+   Each bot needs its own `config.py` and data volumes. Example for a second bot:
+
+   1. Create `config2.py` with different `BOT_TOKEN`, `OWNER_ID`, etc.
+   2. Uncomment `app2` and `tunnel2` in `docker-compose.yml`
+   3. Edit volume mounts to use `config2.py` and separate data dirs
+   4. Start:
+
+   ```bash
+   docker buildx compose up -d
+   ```
+
+   Each bot gets its own cloudflared tunnel URL. Admin ports (qBittorrent, SABnzbd) are mapped to different host ports (`127.0.0.1:8091`, etc.).
+</details>
+
+<details>
+   <summary>Single Container (Manual)</summary>
+
+   ```bash
+   git clone https://github.com/cineflow-web/CineFlow_WZML-X.git
+   cd CineFlow_WZML-X
+   docker build -t wzmlx .
+   docker run -p 8080:8080 wzmlx
+   ```
+</details>
+
+<details>
+   <summary>Deployment Notes</summary>
+
+   1. If you use qBittorrent, tune `AsyncIOThreadsCount` to your machine size.
+   2. Stop the container before removing it, and remove the container before pruning images.
+   3. Useful cleanup commands:
+
+   ```bash
+   docker container prune
+   docker image prune -a
+   ```
+</details>
+
+<details>
+   <summary>Legacy Workflow Guide</summary>
+
+   Some users still rely on the external workflow path referenced by the previous README:
+
+   - [WZ Deploy workflow guide](https://github.com/SilentDemonSD/WZ-Deploy/tree/main?tab=readme-ov-file#2%EF%B8%8F%E2%83%A3-method-2-github-workflow-guide)
+
+   Keep this only if that workflow still matches your deployment style.
+</details>
+
+## Configuration
+
+Start with the required values:
+
+- `BOT_TOKEN`
+- `TELEGRAM_API`
+- `TELEGRAM_HASH`
+- `OWNER_ID`
+- `DATABASE_URL`
+
+Then tune the optional behavior from `config_sample.py`.
+
+<details>
+   <summary>Important user-facing settings</summary>
+
+   | Setting | User impact |
+   |---|---|
+   | `DEFAULT_LANG` | Bot language |
+   | `STATUS_LIMIT` | How much status data is shown |
+   | `DEFAULT_UPLOAD` | Default upload target |
+   | `LEECH_SPLIT_SIZE` | How large leech outputs are split |
+   | `QUEUE_ALL`, `QUEUE_DOWNLOAD`, `QUEUE_UPLOAD` | Queue pressure and concurrency |
+   | `SHOW_CLOUD_LINK` | Whether cloud links are shown to users |
+   | `WEB_PINCODE` | Protects web access to file selection |
+</details>
+
+<details>
+   <summary>Integrations available in config</summary>
+
+   The sample config also covers:
+
+   - qBittorrent and Aria2-related controls
+   - JDownloader login details
+   - Mega credentials
+   - SABnzbd server definitions
+   - Google Drive settings
+   - RSS, search, media metadata, and logging controls
+</details>
+
+<details>
+   <summary>AllDebrid (<code>-ad</code>)</summary>
+
+   Set `ALLDEBRID_API_KEY` (default: empty, feature off) in `config_sample.py`,
+   in the environment, or from **Bot Settings → Config Variables → ALLDEBRID_API_KEY**.
+
+   Add `-ad` to a mirror/leech command to route the input through AllDebrid:
+
+   - `/mirror <filehost link> -ad` unlocks premium hosts (1fichier, rapidgator,
+     mega, ...) and hands the direct link to the normal downloader.
+   - `/leech <magnet> -ad` (or reply to a `.torrent` with `-ad`) uploads the
+     torrent to AllDebrid, waits for it to finish there, then downloads every
+     file from AllDebrid's CDN — aria2/qBittorrent are bypassed entirely.
+
+   The flag is documented in the mirror help menu under the **AllDebrid** button.
+   Without a key the task fails with `ALLDEBRID_API_KEY is not configured`;
+   without `-ad` nothing changes. Magnets stop after 3 min with no seeders and
+   2 h overall, and are removed from your AllDebrid history if the task fails.
+</details>
+
+## Project Layout
+
+| Path | Purpose |
+|---|---|
+| `bot/` | Bot core, handlers, listeners, and modules |
+| `web/` | FastAPI app, templates, and the file selector UI |
+| `gen_scripts/` | Setup helpers for sessions, tokens, and drive configuration |
+| `plugins/` | Optional bot plugins |
+| `qBittorrent/` | Default qBittorrent configuration |
+| `sabnzbd/` | Default SABnzbd configuration |
+
+## Documentation
+
+> [!NOTE]
+> This documentation is still being expanded.
+
+- Full guides: `docs/`
+- Deployment notes: the docs site linked from the repository at WZ Docs
+- Configuration reference: `config_sample.py`
+
+## Support
+
+<details>
+   <summary>Join Community</summary>
+
+   - Telegram channel: https://t.me/CineFlow_Update
+   - Support group: https://t.me/CineFlow_Support
+</details>
+
+## Credits
+
+WZML-X is a fork of [mirror-leech-telegram-bot](https://github.com/anasty17/mirror-leech-telegram-bot). The base project belongs to [anasty17](https://github.com/anasty17) and upstream contributors.
+
+<details>
+   <summary>Bot Authors</summary>
+
+   <table>
+      <thead>
+         <tr>
+            <th>Avatar</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Profile</th>
+         </tr>
+      </thead>
+      <tbody>
+         <tr>
+            <td><img src="https://avatars.githubusercontent.com/u/105407900?v=4" width="72" alt="SilentDemonSD"></td>
+            <td>SilentDemonSD</td>
+            <td>Author, UI design, and custom features</td>
+            <td><a href="https://github.com/SilentDemonSD">GitHub</a></td>
+         </tr>
+         <tr>
+            <td><img src="https://avatars.githubusercontent.com/u/93116400?v=4" width="72" alt="RjRiajul"></td>
+            <td>RjRiajul</td>
+            <td>Co-author and maintainer</td>
+            <td><a href="https://github.com/rjriajul">GitHub</a></td>
+         </tr>
+         <tr>
+            <td><img src="https://avatars.githubusercontent.com/u/113664541?v=4" width="72" alt="CodeWithWeeb"></td>
+            <td>CodeWithWeeb</td>
+            <td>Feature expansion and wrap-up improvements</td>
+            <td><a href="https://github.com/weebzone">GitHub</a></td>
+         </tr>
+         <tr>
+            <td><img src="https://avatars.githubusercontent.com/u/84721324?v=4" width="72" alt="Maverick"></td>
+            <td>Maverick</td>
+            <td>Co-author and bug testing</td>
+            <td><a href="https://github.com/MajnuRangeela">GitHub</a></td>
+         </tr>
+      </tbody>
+   </table>
+</details>
+
+## License
+
+This project is distributed under the terms of the repository license. See [LICENSE](LICENSE) for the full text.
+

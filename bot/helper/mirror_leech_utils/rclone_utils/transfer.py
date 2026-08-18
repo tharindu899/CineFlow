@@ -174,6 +174,9 @@ class RcloneTransferHelper:
             if config_path != "rclone.conf":
                 sa_files = await listdir("accounts")
                 self._sa_number = len(sa_files)
+                if self._sa_number == 0:
+                    LOGGER.error("No service account files found in accounts/")
+                    raise ValueError("No service account files found")
                 self._sa_index = randrange(self._sa_number)
                 remote = f"sa{self._sa_index:03}"
                 LOGGER.info(f"Download with service account {remote}")
@@ -185,6 +188,11 @@ class RcloneTransferHelper:
         if remote_type == "drive" and not self._listener.rc_flags:
             cmd.extend(
                 (
+                    "--drive-acknowledge-abuse",
+                    "--drive-chunk-size",
+                    "128M",
+                    "--tpslimit",
+                    "1",
                     "--tpslimit-burst",
                     "1",
                     "--transfers",
@@ -301,6 +309,9 @@ class RcloneTransferHelper:
             if fconfig_path != "rclone.conf":
                 sa_files = await listdir("accounts")
                 self._sa_number = len(sa_files)
+                if self._sa_number == 0:
+                    LOGGER.error("No service account files found in accounts/")
+                    raise ValueError("No service account files found")
                 self._sa_index = randrange(self._sa_number)
                 fremote = f"sa{self._sa_index:03}"
                 LOGGER.info(f"Upload with service account {fremote}")
@@ -311,10 +322,6 @@ class RcloneTransferHelper:
         if remote_type == "drive" and not self._listener.rc_flags:
             cmd.extend(
                 (
-                    "--drive-chunk-size",
-                    "128M",
-                    "--drive-upload-cutoff",
-                    "128M",
                     "--tpslimit",
                     "1",
                     "--tpslimit-burst",

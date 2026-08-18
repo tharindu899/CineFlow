@@ -1,5 +1,4 @@
-from ..telegram_helper.bot_commands import BotCommands
-
+# ruff: noqa: F403, F405
 mirror = """<b>Send link along with command line or </b>
 
 /cmd link
@@ -50,13 +49,14 @@ link5 -m folder3
 link6
 so link1 and link2 content will be uploaded from same folder which is folder1
 link3 and link4 content will be uploaded from same folder also which is folder2
-link5 will uploaded alone inside new folder named folder3
+link5 will be uploaded alone inside new folder named folder3
 link6 will get uploaded normally alone
 """
 
 thumb = """<b>Thumbnail for current task</b>: -t
 
-/cmd link -t tg-message-link (doc or photo) or none (file without thumb)"""
+/cmd link -t image-url or tg-message-link (doc or photo) or none (file without thumb)
+Supports any direct image URL (jpg, png, webp, etc.) or a Telegram message link containing a photo/document."""
 
 split_size = """<b>Split size for current task</b>: -sp
 
@@ -77,7 +77,7 @@ To add leech destination:
 -up id/@username/pm
 -up b:id/@username/pm (b: means leech by bot) (id or username of the chat or write pm means private message so bot will send the files in private to you)
 when you should use b:(leech by bot)? When your default settings is leech by user and you want to leech by bot for specific task.
--up u:id/@username(u: means leech by user) This incase OWNER added USER_STRING_SESSION.
+-up u:id/@username(u: means leech by user) This in case OWNER added USER_STRING_SESSION.
 -up h:id/@username(hybrid leech) h: to upload files by bot and user based on file size.
 -up id/@username|topic_id(leech in specific chat and topic) add | without space and write topic id after chat id or username.
 
@@ -87,10 +87,10 @@ DEFAULT_UPLOAD doesn't affect on leech cmds.
 
 user_download = """<b>User Download</b>: link
 
-/cmd tp:link to download using owner token.pickle incase service account enabled.
-/cmd sa:link to download using service account incase service account disabled.
-/cmd tp:gdrive_id to download using token.pickle and file_id incase service account enabled.
-/cmd sa:gdrive_id to download using service account and file_id incase service account disabled.
+/cmd tp:link to download using owner token.pickle in case service account enabled.
+/cmd sa:link to download using service account in case service account disabled.
+/cmd tp:gdrive_id to download using token.pickle and file_id in case service account enabled.
+/cmd sa:gdrive_id to download using service account and file_id in case service account disabled.
 /cmd mtp:gdrive_id or mtp:link to download using user token.pickle uploaded from usetting
 /cmd mrcc:remote:path to download using user rclone config uploaded from usetting
 you can simply edit upload using owner/user token/config from usetting without adding mtp: or mrcc: before the path/id"""
@@ -110,13 +110,13 @@ link2 -z -n new name -up remote2:path2
 link3 -e -n new name -up remote2:path2
 Reply to this example by this cmd -> /cmd -b(bulk)
 
-Note: Any arg along with the cmd will be setted to all links
+Note: Any arg along with the cmd will be set to all links
 /cmd -b -up remote: -z -m folder name (all links contents in one zipped folder uploaded to one destination)
-so you can't set different upload destinations along with link incase you have added -m along with cmd
+so you can't set different upload destinations along with link in case you have added -m along with cmd
 You can set start and end of the links from the bulk like seed, with -b start:end or only end by -b :end or only start by -b start.
 The default start is from zero(first link) to inf."""
 
-rlone_dl = """<b>Rclone Download</b>:
+rclone_dl = """<b>Rclone Download</b>:
 
 Treat rclone paths exactly like links
 /cmd main:dump/ubuntu.iso or rcl(To select config, remote and path)
@@ -164,6 +164,13 @@ screenshot = """<b>ScreenShots</b>: -ss
 Create screenshots for one video or folder of videos.
 /cmd -ss (it will take the default values which is 10 photos).
 You can control this value. Example: /cmd -ss 6."""
+
+vid_tools = """<b>Video Tools</b>: -vt
+
+Opens an interactive menu (before the download starts) to trim, merge videos/audios/subs,
+watermark (with optional hardsub), compress, convert resolution, sync subtitles, or
+extract/remove streams from the downloaded file(s).
+/cmd link -vt"""
 
 seed = """<b>Bittorrent seed</b>: -d
 
@@ -217,7 +224,7 @@ You can simply edit using owner/user config from usetting without adding mrcc: b
 name_swap = r"""<b>Name Substitution</b>: -ns
 /cmd link -ns script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
 This will affect on all files. Format: wordToReplace/wordToReplaceWith/sensitiveCase
-Word Subtitions. You can add pattern instead of normal text. Timeout: 60 sec
+Word Substitutions. You can add pattern instead of normal text. Timeout: 60 sec
 NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[]{}-
 1. script will get replaced by code with sensitive case
 2. mirror will get replaced by leech
@@ -229,9 +236,9 @@ NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[
 """
 
 transmission = """<b>Tg transmission</b>: -hl -ut -bt
-/cmd link -hl (leech by user and bot session with respect to size) (Hybrid Leech)
-/cmd link -bt (leech by bot session)
-/cmd link -ut (leech by user)"""
+/cmd link -hl (both: user for >2GB, bot for ≤2GB)
+/cmd link -bt (bot only)
+/cmd link -ut (user only)"""
 
 thumbnail_layout = """Thumbnail Layout: -tl
 /cmd link -tl 3x3 (widthxheight) 3 photos in row and 3 photos in column"""
@@ -247,10 +254,56 @@ Notes:
 3. To execute one of pre-added lists in bot like: ({"subtitle": ["-i mltb.mkv -c copy -c:s srt mltb.mkv"]}), you must use -ff subtitle (list key)
 Examples: ["-i mltb.mkv -c copy -c:s srt mltb.mkv", "-i mltb.video -c copy -c:s srt mltb", "-i mltb.m4a -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb.audio -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb -map 0:a -c copy mltb.mka -map 0:s -c copy mltb.srt"]
 Here I will explain how to use mltb.* which is reference to files you want to work on.
-1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. -del will delete the original media after complete run of the cmd.
-2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
-3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
+1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs are mkv. -del will delete the original media after complete run of the cmd.
+2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extension is the same as input files.
+3. Third cmd: the input is mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
 4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3."""
+
+alldebrid_arg = """<b>AllDebrid Unlock</b>: -ad
+
+/cmd link -ad
+Resolves filehost links (1fichier, rapidgator, mega, etc.) via the
+AllDebrid API before handing off to the existing direct downloader.
+
+Magnet/torrent inputs are also routed through AllDebrid when -ad
+is set: the bot uploads the magnet (or replied <code>.torrent</code>
+file), waits for AllDebrid to finish torrenting, then downloads each
+file directly from AllDebrid CDNs. This bypasses aria2/qBittorrent
+entirely so dead torrents finish faster on a debrid plan.
+
+Requires <code>ALLDEBRID_API_KEY</code> in the bot configuration."""
+
+metadata = """<b>Metadata</b>: -meta
+
+Apply custom metadata to media files using pipe (|) separator.
+
+<b>Format:</b> key=value|key2=value2|key3=value3
+
+<b>Dynamic Variables:</b>
+• <code>{filename}</code> - Original filename
+• <code>{basename}</code> - Filename without extension  
+• <code>{extension}</code> - File extension
+• <code>{audiolang}</code> - Audio language (auto-detected or English)
+• <code>{sublang}</code> - Subtitle language (auto-detected or none)
+• <code>{year}</code> - Year extracted from filename
+
+<b>Per-Stream Metadata:</b>
+Set different metadata for audio/video/subtitle streams in User Settings > FFmpeg Settings:
+• <b>Audio Metadata:</b> Applied to each audio stream
+• <b>Video Metadata:</b> Applied to video streams  
+• <b>Subtitle Metadata:</b> Applied to subtitle streams
+
+<b>Examples:</b>
+<code>/mirror link -meta title=My Movie|artist={audiolang} Version</code>
+<code>/yt link -meta album={basename}|year={year}|genre=Action</code>
+
+<b>Escape Pipes:</b> Use <code>\\|</code> to include literal pipe in values:
+<code>title=Movie \\| Director's Cut</code>
+
+<b>User Settings Example:</b>
+• Audio Metadata: <code>language={audiolang}|title=Audio Track</code>
+• Video Metadata: <code>title={basename}|year={year}</code>
+• Subtitle Metadata: <code>language={sublang}|title=Subtitles</code>"""
 
 YT_HELP_DICT = {
     "main": yt,
@@ -267,6 +320,7 @@ YT_HELP_DICT = {
     "Bulk": bulk,
     "Sample-Video": sample_video,
     "Screenshot": screenshot,
+    "Video-Tools": vid_tools,
     "Convert-Media": convert_media,
     "Force-Start": force_start,
     "Name-Swap": name_swap,
@@ -274,6 +328,7 @@ YT_HELP_DICT = {
     "Thumb-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
     "FFmpeg-Cmds": ffmpeg_cmds,
+    "Metadata": metadata,
 }
 
 MIRROR_HELP_DICT = {
@@ -282,7 +337,7 @@ MIRROR_HELP_DICT = {
     "DL-Auth": "<b>Direct link authorization</b>: -au -ap\n\n/cmd link -au username -ap password",
     "Headers": "<b>Direct link custom headers</b>: -h\n\n/cmd link -h key: value key1: value1",
     "Extract/Zip": extract_zip,
-    "Select-Files": "<b>Bittorrent/JDownloader File Selection</b>: -s\n\n/cmd link -s or by replying to file/link",
+    "Select-Files": "<b>Bittorrent/JDownloader/Sabnzbd File Selection</b>: -s\n\n/cmd link -s or by replying to file/link",
     "Torrent-Seed": seed,
     "Multi-Link": multi_link,
     "Same-Directory": same_dir,
@@ -292,10 +347,11 @@ MIRROR_HELP_DICT = {
     "Rclone-Flags": rcf,
     "Bulk": bulk,
     "Join": join,
-    "Rclone-DL": rlone_dl,
+    "Rclone-DL": rclone_dl,
     "Tg-Links": tg_links,
     "Sample-Video": sample_video,
     "Screenshot": screenshot,
+    "Video-Tools": vid_tools,
     "Convert-Media": convert_media,
     "Force-Start": force_start,
     "User-Download": user_download,
@@ -304,6 +360,8 @@ MIRROR_HELP_DICT = {
     "Thumb-Layout": thumbnail_layout,
     "Leech-Type": leech_as,
     "FFmpeg-Cmds": ffmpeg_cmds,
+    "Metadata": metadata,
+    "AllDebrid": alldebrid_arg,
 }
 
 CLONE_HELP_DICT = {
@@ -328,7 +386,7 @@ Title3 link -c cmd -d ratio:time -z password
 Example: Title https://www.rss-url.com -inf 1080 or 720 or 144p|mkv or mp4|hevc -exf flv or web|xxx
 This filter will parse links that its titles contain `(1080 or 720 or 144p) and (mkv or mp4) and hevc` and doesn't contain (flv or web) and xxx words. You can add whatever you want.
 
-Another example: -inf  1080  or 720p|.web. or .webrip.|hvec or x264. This will parse titles that contain ( 1080  or 720p) and (.web. or .webrip.) and (hvec or x264). I have added space before and after 1080 to avoid wrong matching. If this `10805695` number in title it will match 1080 if added 1080 without spaces after it.
+Another example: -inf  1080  or 720p|.web. or .webrip.|hevc or x264. This will parse titles that contain ( 1080  or 720p) and (.web. or .webrip.) and (hevc or x264). I have added space before and after 1080 to avoid wrong matching. If this `10805695` number in title it will match 1080 if added 1080 without spaces after it.
 
 Filter Notes:
 1. | means and.
@@ -346,70 +404,195 @@ PASSWORD_ERROR_MESSAGE = """
 """
 
 
-help_string = f"""
-NOTE: Try each command without any argument to see more detalis.
-/{BotCommands.MirrorCommand[0]} or /{BotCommands.MirrorCommand[1]}: Start mirroring to cloud.
-/{BotCommands.QbMirrorCommand[0]} or /{BotCommands.QbMirrorCommand[1]}: Start Mirroring to cloud using qBittorrent.
-/{BotCommands.JdMirrorCommand[0]} or /{BotCommands.JdMirrorCommand[1]}: Start Mirroring to cloud using JDownloader.
-/{BotCommands.YtdlCommand[0]} or /{BotCommands.YtdlCommand[1]}: Mirror yt-dlp supported link.
-/{BotCommands.LeechCommand[0]} or /{BotCommands.LeechCommand[1]}: Start leeching to Telegram.
-/{BotCommands.QbLeechCommand[0]} or /{BotCommands.QbLeechCommand[1]}: Start leeching using qBittorrent.
-/{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
-/{BotCommands.YtdlLeechCommand[0]} or /{BotCommands.YtdlLeechCommand[1]}: Leech yt-dlp supported link.
-/{BotCommands.CloneCommand} [drive_url]: Copy file/folder to Google Drive.
-/{BotCommands.CountCommand} [drive_url]: Count file/folder of Google Drive.
-/{BotCommands.DeleteCommand} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo).
-/{BotCommands.UserSetCommand[0]} or /{BotCommands.UserSetCommand[1]} [query]: Users settings.
-/{BotCommands.BotSetCommand[0]} or /{BotCommands.BotSetCommand[1]} [query]: Bot settings.
-/{BotCommands.SelectCommand}: Select files from torrents by gid or reply.
-/{BotCommands.CancelTaskCommand[0]} or /{BotCommands.CancelTaskCommand[1]} [gid]: Cancel task by gid or reply.
-/{BotCommands.ForceStartCommand[0]} or /{BotCommands.ForceStartCommand[1]} [gid]: Force start task by gid or reply.
-/{BotCommands.CancelAllCommand} [query]: Cancel all [status] tasks.
-/{BotCommands.ListCommand} [query]: Search in Google Drive(s).
-/{BotCommands.SearchCommand} [query]: Search for torrents with API.
-/{BotCommands.MediaInfoCommand[0]} or /{BotCommands.MediaInfoCommand[1]} [query]: Get media info.
-/{BotCommands.StatusCommand}: Shows a status of all the downloads.
-/{BotCommands.StatsCommand}: Show stats of the machine where the bot is hosted in.
-/{BotCommands.PingCommand}: Check how long it takes to Ping the Bot (Only Owner & Sudo).
-/{BotCommands.AuthorizeCommand}: Authorize a chat or a user to use the bot (Only Owner & Sudo).
-/{BotCommands.UnAuthorizeCommand}: Unauthorize a chat or a user to use the bot (Only Owner & Sudo).
-/{BotCommands.UsersCommand}: show users settings (Only Owner & Sudo).
-/{BotCommands.AddSudoCommand}: Add sudo user (Only Owner).
-/{BotCommands.RmSudoCommand}: Remove sudo users (Only Owner).
-/{BotCommands.RestartCommand}: Restart and update the bot (Only Owner & Sudo).
-/{BotCommands.LogCommand}: Get a log file of the bot. Handy for getting crash reports (Only Owner & Sudo).
-/{BotCommands.ShellCommand}: Run shell commands (Only Owner).
-/{BotCommands.AExecCommand}: Exec async functions (Only Owner).
-/{BotCommands.ExecCommand}: Exec sync functions (Only Owner).
-/{BotCommands.ClearLocalsCommand}: Clear {BotCommands.AExecCommand} or {BotCommands.ExecCommand} locals (Only Owner).
-/{BotCommands.RssCommand}: RSS Menu.
-"""
+def get_bot_commands():
+    from ...core.plugin_manager import get_plugin_manager
 
-BOT_COMMANDS = {
-    "Mirror": "[link/file] Mirror to Upload Destination",
-    "QbMirror": "[magnet/torrent] Mirror to Upload Destination using qbit",
-    "Ytdl": "[link] Mirror YouTube, m3u8, Social Media and yt-dlp supported urls",
-    "Leech": "[link/file] Leech files to Upload to Telegram",
-    "QbLeech": "[magnet/torrent] Leech files to Upload to Telegram using qbit",
-    "YtdlLeech": "[link] Leech YouTube, m3u8, Social Media and yt-dlp supported urls",
-    "Clone": "[link] Clone files/folders to GDrive",
-    "UserSet": "User personal settings",
-    "ForceStart": "[gid/reply] Force start from queued task",
-    "Count": "[link] Count no. of files/folders in GDrive",
-    "List": "[query] Search any Text which is available in GDrive",
-    "Search": "[query] Search torrents via Qbit Plugins",
-    "MediaInfo": "[reply/link] Get MediaInfo of the Target Media",
-    "SpeedTest": "Check Bot Speed using Speedtest.com",
-    "Select": "[gid/reply] Select files for Aria2, Qbit Tasks",
-    "Ping": "Ping Bot to test Response Speed",
-    "Status": "[id/me] Tasks Status of Bot",
-    "Stats": "Bot, OS, Repo & System full Statistics",
-    "Rss": "User RSS Management Settings",
-    "IMDB": "[query] or ttxxxxxx Get IMDB info",
-    "CancelAll": "Cancel all Tasks on the Bot",
-    "Help": "Detailed help usage of the WZ Bot",
-    "BotSet": "[SUDO] Bot Management Settings",
-    "Log": "[SUDO] Get Bot Logs for Internal Working",
-    "Restart": "[SUDO] Reboot bot",
-    "RestartSessions": "[SUDO] Reboot User Sessions",
-}
+    static_commands = {
+        "Mirror": "[link/file] Mirror to Upload Destination",
+        "QbMirror": "[magnet/torrent] Mirror to Upload Destination using qbit",
+        "Ytdl": "[link] Mirror YouTube, m3u8, Social Media and yt-dlp supported urls",
+        "UpHoster": "[link/file] Upload to DDL Servers",
+        "Leech": "[link/file] Leech files to Upload to Telegram",
+        "QbLeech": "[magnet/torrent] Leech files to Upload to Telegram using qbit",
+        "YtdlLeech": "[link] Leech YouTube, m3u8, Social Media and yt-dlp supported urls",
+        "Clone": "[link] Clone files/folders to GDrive",
+        "UserSet": "User personal settings",
+        "ForceStart": "[gid/reply] Force start from queued task",
+        "Count": "[link] Count no. of files/folders in GDrive",
+        "List": "[query] Search any Text which is available in GDrive",
+        "Search": "[query] Search torrents via Qbit Plugins",
+        "MediaInfo": "[reply/link] Get MediaInfo of the Target Media",
+        "Select": "[gid/reply] Select files for NZB, Aria2, Qbit Tasks",
+        "Ping": "Ping Bot to test Response Speed",
+        "Status": "[id/me] Tasks Status of Bot",
+        "Stats": "Bot, OS, Repo & System full Statistics",
+        "Rss": "User RSS Management Settings",
+        "IMDB": "[query] or ttxxxxxx Get IMDB info",
+        "CancelAll": "Cancel all Tasks on the Bot",
+        "Help": "Detailed help usage of the CineFlow Bot",
+        "BotSet": "[SUDO] Bot Management Settings",
+        "Log": "[SUDO] Get Bot Logs for Internal Working",
+        "Restart": "[SUDO] Reboot bot",
+        "RestartSessions": "[SUDO] Reboot User Sessions",
+        "GenPyroSess": "[SUDO] Generate Pyrogram String Session",
+    }
+
+    commands = static_commands.copy()
+
+    plugin_manager = get_plugin_manager()
+    if plugin_manager:
+        for plugin_info in plugin_manager.list_plugins():
+            if plugin_info.enabled and plugin_info.commands:
+                for cmd in plugin_info.commands:
+                    key = cmd.capitalize()
+                    if key not in commands:
+                        commands[key] = (
+                            plugin_info.description or f"Plugin command: {cmd}"
+                        )
+
+    return commands
+
+
+BOT_COMMANDS = get_bot_commands()
+
+
+def get_help_string():
+    from ..telegram_helper.bot_commands import BotCommands
+
+    help_lines = ["NOTE: Try each command without any argument to see more details."]
+
+    commands = BotCommands.get_commands()
+
+    for key, cmds in commands.items():
+        cmd_attr = getattr(BotCommands, f"{key}Command", None)
+        if not cmd_attr:
+            continue
+
+        if isinstance(cmd_attr, list):
+            cmd_str = f"/{' or /'.join(cmd_attr)}"
+        else:
+            cmd_str = f"/{cmd_attr}"
+
+        if key == "Mirror":
+            help_lines.append(f"{cmd_str}: Start mirroring to cloud.")
+        elif key == "QbMirror":
+            help_lines.append(f"{cmd_str}: Start Mirroring to cloud using qBittorrent.")
+        elif key == "JdMirror":
+            help_lines.append(f"{cmd_str}: Start Mirroring to cloud using JDownloader.")
+        elif key == "NzbMirror":
+            help_lines.append(f"{cmd_str}: Start Mirroring to cloud using Sabnzbd.")
+        elif key == "Ytdl":
+            help_lines.append(f"{cmd_str}: Mirror yt-dlp supported link.")
+        elif key == "UpHoster":
+            help_lines.append(f"{cmd_str}: Upload to DDL Servers.")
+        elif key == "Leech":
+            help_lines.append(f"{cmd_str}: Start leeching to Telegram.")
+        elif key == "QbLeech":
+            help_lines.append(f"{cmd_str}: Start leeching using qBittorrent.")
+        elif key == "JdLeech":
+            help_lines.append(f"{cmd_str}: Start leeching using JDownloader.")
+        elif key == "NzbLeech":
+            help_lines.append(f"{cmd_str}: Start leeching using Sabnzbd.")
+        elif key == "YtdlLeech":
+            help_lines.append(f"{cmd_str}: Leech yt-dlp supported link.")
+        elif key == "Clone":
+            help_lines.append(
+                f"{cmd_str} [drive_url]: Copy file/folder to Google Drive."
+            )
+        elif key == "Count":
+            help_lines.append(
+                f"{cmd_str} [drive_url]: Count file/folder of Google Drive."
+            )
+        elif key == "Delete":
+            help_lines.append(
+                f"{cmd_str} [drive_url]: Delete file/folder from Google Drive (Only Owner & Sudo)."
+            )
+        elif key == "UserSet":
+            help_lines.append(f"{cmd_str} [query]: Users settings.")
+        elif key == "BotSet":
+            help_lines.append(f"{cmd_str} [query]: Bot settings.")
+        elif key == "Select":
+            help_lines.append(
+                f"{cmd_str}: Select files from torrents or nzb by gid or reply."
+            )
+        elif key == "CancelTask":
+            help_lines.append(f"{cmd_str} [gid]: Cancel task by gid or reply.")
+        elif key == "ForceStart":
+            help_lines.append(f"{cmd_str} [gid]: Force start task by gid or reply.")
+        elif key == "CancelAll":
+            help_lines.append(f"{cmd_str} [query]: Cancel all [status] tasks.")
+        elif key == "List":
+            help_lines.append(f"{cmd_str} [query]: Search in Google Drive(s).")
+        elif key == "Search":
+            help_lines.append(f"{cmd_str} [query]: Search for torrents with API.")
+        elif key == "MediaInfo":
+            help_lines.append(f"{cmd_str} [query]: Get media info.")
+        elif key == "Status":
+            help_lines.append(f"{cmd_str}: Shows a status of all the downloads.")
+        elif key == "Stats":
+            help_lines.append(
+                f"{cmd_str}: Show stats of the machine where the bot is hosted in."
+            )
+        elif key == "Ping":
+            help_lines.append(
+                f"{cmd_str}: Check how long it takes to Ping the Bot (Only Owner & Sudo)."
+            )
+        elif key == "Authorize":
+            help_lines.append(
+                f"{cmd_str}: Authorize a chat or a user to use the bot (Only Owner & Sudo)."
+            )
+        elif key == "UnAuthorize":
+            help_lines.append(
+                f"{cmd_str}: Unauthorize a chat or a user to use the bot (Only Owner & Sudo)."
+            )
+        elif key == "Users":
+            help_lines.append(f"{cmd_str}: show users settings (Only Owner & Sudo).")
+        elif key == "AddSudo":
+            help_lines.append(f"{cmd_str}: Add sudo user (Only Owner).")
+        elif key == "RmSudo":
+            help_lines.append(f"{cmd_str}: Remove sudo users (Only Owner).")
+        elif key == "BlackList":
+            help_lines.append(
+                f"{cmd_str}: Blacklist a user from using the bot (Only Owner & Sudo)."
+            )
+        elif key == "RmBlackList":
+            help_lines.append(
+                f"{cmd_str}: Remove a user from blacklist (Only Owner & Sudo)."
+            )
+        elif key == "AddImage":
+            help_lines.append(
+                f"{cmd_str}: Add an image to the gallery by reply to photo or link."
+            )
+        elif key == "Images":
+            help_lines.append(f"{cmd_str}: View and manage the image gallery.")
+        elif key == "Restart":
+            help_lines.append(
+                f"{cmd_str}: Restart and update the bot (Only Owner & Sudo)."
+            )
+        elif key == "Log":
+            help_lines.append(
+                f"{cmd_str}: Get a log file of the bot. Handy for getting crash reports (Only Owner & Sudo)."
+            )
+        elif key == "Shell":
+            help_lines.append(f"{cmd_str}: Run shell commands (Only Owner).")
+        elif key == "AExec":
+            help_lines.append(f"{cmd_str}: Exec async functions (Only Owner).")
+        elif key == "Exec":
+            help_lines.append(f"{cmd_str}: Exec sync functions (Only Owner).")
+        elif key == "ClearLocals":
+            help_lines.append(
+                f"/{BotCommands.ClearLocalsCommand}: Clear {BotCommands.AExecCommand} or {BotCommands.ExecCommand} locals (Only Owner)."
+            )
+        elif key == "Rss":
+            help_lines.append(f"/{BotCommands.RssCommand}: RSS Menu.")
+        elif key == "GenPyroSess":
+            help_lines.append(
+                f"/{BotCommands.GenPyroSessCommand}: Generate Pyrogram String Session (Only Owner & Sudo)."
+            )
+        elif key in BOT_COMMANDS:
+            help_lines.append(f"{cmd_str}: {BOT_COMMANDS[key]}")
+
+    return "\n".join(help_lines)
+
+
+help_string = get_help_string()

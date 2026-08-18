@@ -8,64 +8,11 @@ from ..core.config_manager import Config
 from ..helper.ext_utils.help_messages import BOT_COMMANDS
 from ..helper.telegram_helper.bot_commands import BotCommands
 from ..helper.telegram_helper.filters import CustomFilters
-from ..helper.telegram_helper.message_utils import send_message
 from ..modules import *
 from .tg_client import TgClient
-from .. import LOGGER
 
 
-async def save_to_saved_messages(_, query):
-    """Sends the complete message with buttons to user's PM when they click the save button"""
-    user_id = query.from_user.id
-    message = query.message
-    prefix = "save_"
-    
-    if not query.data.startswith(prefix):
-        return
-    
-    try:
-        LOGGER.info(f"Save button clicked by user {user_id}")
-        # Extract message content and buttons to send to user's PM
-        text = message.text or message.caption or ""
-        
-        # Create a new message with the same content and buttons in user's PM
-        if message.text:
-            LOGGER.info(f"Sending text message to user {user_id}")
-            await send_message(
-                user_id,
-                text,
-                message.reply_markup
-            )
-        elif message.caption:
-            if message.photo:
-                LOGGER.info(f"Sending photo with caption to user {user_id}")
-                await TgClient.bot.send_photo(
-                    chat_id=user_id,
-                    photo=message.photo.file_id,
-                    caption=text,
-                    reply_markup=message.reply_markup
-                )
-            elif message.document:
-                LOGGER.info(f"Sending document with caption to user {user_id}")
-                await TgClient.bot.send_document(
-                    chat_id=user_id,
-                    document=message.document.file_id,
-                    caption=text,
-                    reply_markup=message.reply_markup
-                )
-        
-        # Notify user
-        await query.answer("Message sent to your PM with all links!", show_alert=True)
-        
-        # Reply to the original message that the content was sent to PM
-        reply_text = f"@{query.from_user.username or user_id}, I've sent this to your PM"
-        await message.reply_text(reply_text)
-        LOGGER.info(f"Successfully sent saved message to user {user_id}")
-    except Exception as e:
-        LOGGER.error(f"Error in save_to_saved_messages: {str(e)}")
-        await query.answer(f"Error: {str(e)}", show_alert=True)
-
-def add_handlers():
+async def add_handlers():
     TgClient.bot.add_handler(
         MessageHandler(
             authorize,
@@ -92,6 +39,26 @@ def add_handlers():
             remove_sudo,
             filters=command(BotCommands.RmSudoCommand, case_sensitive=True)
             & CustomFilters.sudo,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            add_blacklist,
+            filters=command(BotCommands.BlackListCommand, case_sensitive=True)
+            & CustomFilters.sudo,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            remove_blacklist,
+            filters=command(BotCommands.RmBlackListCommand, case_sensitive=True)
+            & CustomFilters.sudo,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            black_listed,
+            filters=regex(r"^/") & CustomFilters.authorized & CustomFilters.blacklisted,
         )
     )
     TgClient.bot.add_handler(
@@ -164,7 +131,7 @@ def add_handlers():
     TgClient.bot.add_handler(
         MessageHandler(
             select,
-            filters=command(BotCommands.SelectCommand, case_sensitive=True)
+            filters=regex(rf"^/{BotCommands.SelectCommand[1]}?(?:_\w+).*$")
             & CustomFilters.authorized,
         )
     )
@@ -226,6 +193,13 @@ def add_handlers():
     )
     TgClient.bot.add_handler(
         MessageHandler(
+            nzb_mirror,
+            filters=command(BotCommands.NzbMirrorCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
             leech,
             filters=command(BotCommands.LeechCommand, case_sensitive=True)
             & CustomFilters.authorized,
@@ -242,6 +216,20 @@ def add_handlers():
         MessageHandler(
             jd_leech,
             filters=command(BotCommands.JdLeechCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            nzb_leech,
+            filters=command(BotCommands.NzbLeechCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            uphoster,
+            filters=command(BotCommands.UpHosterCommand, case_sensitive=True)
             & CustomFilters.authorized,
         )
     )
@@ -336,11 +324,22 @@ def add_handlers():
     )
     TgClient.bot.add_handler(
         MessageHandler(
-            speedtest,
-            filters=command(BotCommands.SpeedTestCommand, case_sensitive=True)
+            picture_add,
+            filters=command(BotCommands.AddImageCommand, case_sensitive=True)
             & CustomFilters.authorized,
         )
     )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            pictures,
+            filters=command(BotCommands.ImagesCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        CallbackQueryHandler(pics_callback, filters=regex("^images"))
+    )
+
     TgClient.bot.add_handler(
         MessageHandler(
             bot_stats,
@@ -402,6 +401,40 @@ def add_handlers():
             & CustomFilters.authorized,
         )
     )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            hydra_search,
+            filters=command(BotCommands.NzbSearchCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            gen_pyro_string,
+            filters=command(BotCommands.GenPyroSessCommand, case_sensitive=True)
+            & CustomFilters.sudo,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            change_category,
+            filters=command(BotCommands.CategorySelectCommand)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        CallbackQueryHandler(confirm_category, filters=regex("^scat"))
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            drive_clean,
+            filters=command(BotCommands.GDCleanCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        CallbackQueryHandler(confirm_drive_clean_cb, filters=regex("^gdccat"))
+    )
     if Config.SET_COMMANDS:
         global BOT_COMMANDS
 
@@ -422,12 +455,26 @@ def add_handlers():
                 6,
             )
 
+        if len(Config.USENET_SERVERS) != 0:
+            BOT_COMMANDS = insert_at(
+                BOT_COMMANDS,
+                "NzbMirror",
+                "[nzb] Mirror to Upload Destination using Sabnzbd",
+                2,
+            )
+            BOT_COMMANDS = insert_at(
+                BOT_COMMANDS,
+                "NzbLeech",
+                "[nzb] Leech files to Upload to Telegram using Sabnzbd",
+                6,
+            )
+
         if Config.LOGIN_PASS:
             BOT_COMMANDS = insert_at(
                 BOT_COMMANDS, "Login", "[password] Login to Bot", 14
             )
 
-        TgClient.bot.set_bot_commands(
+        await TgClient.bot.set_bot_commands(
             [
                 BotCommand(
                     cmds[0] if isinstance(cmds, list) else cmds,
@@ -438,7 +485,3 @@ def add_handlers():
                 if cmds is not None
             ]
         )
-
-    TgClient.bot.add_handler(
-        CallbackQueryHandler(save_to_saved_messages, filters=regex("^save_"))
-    )

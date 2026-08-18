@@ -10,8 +10,10 @@ from .. import (
     task_dict,
     bot_start_time,
     intervals,
+    sabnzbd_client,
     DOWNLOAD_DIR,
 )
+from ..core.config_manager import Config
 from ..core.torrent_manager import TorrentManager
 from ..core.jdownloader_booter import jdownloader
 from ..helper.ext_utils.bot_utils import new_task
@@ -32,137 +34,34 @@ from ..helper.telegram_helper.message_utils import (
     edit_message,
 )
 from ..helper.telegram_helper.button_build import ButtonMaker
-import os
-import random
-import importlib.util
-from ..core.config_manager import Config
-
-
-def get_owner_id():
-    # 1. Try to import from config.py if present
-    config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config.py"
-    )
-    if os.path.exists(config_path):
-        spec = importlib.util.spec_from_file_location("config", config_path)
-        config = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(config)
-            if hasattr(config, "OWNER_ID"):
-                return config.OWNER_ID
-        except Exception:
-            pass
-    # 2. Try environment variable
-    owner_id_env = os.getenv("OWNER_ID")
-    if owner_id_env is not None:
-        try:
-            return int(owner_id_env)
-        except ValueError:
-            pass
-    # 3. Fallback to config_manager.py
-    return getattr(Config, "OWNER_ID", 0)
-
-
-OWNER_ID = get_owner_id()
-
-# Easter eggs for normal users (50)
-easter_eggs = [
-    "💀 <b><i>Stop it, Get Some Help!</i></b>",
-    "☠️ <b><i>Bro… there’s nothing here.</i></b>",
-    "🧠 <b><i>Empty. Just like your head.</i></b>",
-    "👻 <b><i>Ghost town, pal. No tasks here.</i></b>",
-    "🎈 <b><i>All air, no substance. Zero tasks.</i></b>",
-    "📭 <b><i>The taskbox is emptier than your DMs.</i></b>",
-    "🥶 <b><i>Cold, dead silence. No action here.</i></b>",
-    "🕳️ <b><i>A black hole of nothingness.</i></b>",
-    "🫥 <b><i>Disappeared… like your crush did.</i></b>",
-    "🪦 <b><i>Buried in inactivity. Nothing running.</i></b>",
-    "😴 <b><i>Asleep on the job? Nope — nothing started.</i></b>",
-    "🧍 <b><i>Standing still. Nothing’s moving.</i></b>",
-    "🕸️ <b><i>Covered in cobwebs. No tasks alive.</i></b>",
-    "🔍 <b><i>Searched everywhere — found nothing.</i></b>",
-    "🫠 <b><i>Nothing but silence…</i></b>",
-    "🐍 <b><i>No scripts hissing here.</i></b>",
-    "📉 <b><i>Task levels: Rock bottom.</i></b>",
-    "🎭 <b><i>An empty stage. No acts playing.</i></b>",
-    "🎮 <b><i>No game. No players. Just you.</i></b>",
-    "🚪 <b><i>Closed shop. Nothing’s running.</i></b>",
-    "📺 <b><i>No broadcast found.</i></b>",
-    "📝 <b><i>Blank slate. Zero tasks.</i></b>",
-    "🦴 <b><i>Bone dry.</i></b>",
-    "💨 <b><i>Gone with the wind. No processes.</i></b>",
-    "🛸 <b><i>Abducted by aliens, maybe?</i></b>",
-    "🕯️ <b><i>Lit a candle… still no tasks.</i></b>",
-    "🦗 <b><i>Crickets…</i></b>",
-    "🚫 <b><i>No entries, no fun.</i></b>",
-    "🖥️ <b><i>System idle. Nada.</i></b>",
-    "🌑 <b><i>Dark and empty.</i></b>",
-    "🥲 <b><i>This hurts. No tasks yet.</i></b>",
-    "📡 <b><i>Signal lost. No task detected.</i></b>",
-    "🎶 <b><i>No song playing.</i></b>",
-    "📂 <b><i>Folder’s empty too.</i></b>",
-    "🥀 <b><i>Withered away. No work here.</i></b>",
-    "🌫️ <b><i>Lost in the mist of nothingness.</i></b>",
-    "🛌 <b><i>Taking a nap. No activity.</i></b>",
-    "🚷 <b><i>Nothing allowed. No tasks here.</i></b>",
-    "🥸 <b><i>You pretending there’s a task?</i></b>",
-    "🎲 <b><i>Rolled a zero.</i></b>",
-    "🗿 <b><i>Stone-cold nothing.</i></b>",
-    "🧤 <b><i>Handled… except there’s nothing to handle.</i></b>",
-    "📢 <b><i>Loud silence detected.</i></b>",
-    "🔕 <b><i>No notifications. No jobs.</i></b>",
-    "🥁 <b><i>Drumroll… for nothing.</i></b>",
-    "🪑 <b><i>Empty chair vibes.</i></b>",
-    "📸 <b><i>Snapshot of… absolutely nothing.</i></b>",
-    "🐚 <b><i>Echoes of nothing.</i></b>",
-    "🌪️ <b><i>A whirlwind of inactivity.</i></b>",
-]
-
-# Polite responses for owner (10)
-owner_responses = [
-    "✨ <b>Dear Master, there are no tasks currently running.</b>",
-    "🙏 <b>My deepest respects, but nothing is in progress right now.</b>",
-    "💎 <b>Everything’s clear at the moment, Boss.</b>",
-    "🫡 <b>No active tasks, Sir. Standing by.</b>",
-    "👑 <b>Nothing in queue, My Liege.</b>",
-    "🎩 <b>At your service, Master. The task list is empty.</b>",
-    "⚙️ <b>No active processes, as you command.</b>",
-    "🖥️ <b>The system is idle and awaiting your orders.</b>",
-    "📊 <b>All clear, Captain. No current operations.</b>",
-    "📭 <b>The taskbox is empty, Boss.</b>",
-]
 
 
 @new_task
 async def task_status(_, message):
     async with task_dict_lock:
         count = len(task_dict)
-
     if count == 0:
         currentTime = get_readable_time(time() - bot_start_time)
         free = get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)
-
-        # ✅ Check owner or normal user using imported OWNER_ID
-        if message.from_user.id == OWNER_ID:
-            response = random.choice(owner_responses)
-        else:
-            response = random.choice(easter_eggs)
-
-        msg = f"""{response}
+        msg = f"""〶 <b><i>No Active Bot Tasks!</i></b>
+│
+┖ <b>NOTE</b> → <i>Each user can get status for his tasks by adding "me" or user_id like "1234xxx" after cmd: /{BotCommands.StatusCommand[0]} me or /{BotCommands.StatusCommand[1]} me</i>
 
 ⌬ <b><u>Bot Stats</u></b>
-╭ <b>CPU</b> → {cpu_percent()}%
-┊ <b>RAM</b> → {virtual_memory().percent}%
-┊ <b>Free</b> → {free}
-╰ <b>UP</b> → {currentTime}
+┟ <b>CPU</b> → {cpu_percent()}% | <b>F</b> → {free} [{round(100 - disk_usage(DOWNLOAD_DIR).percent, 1)}%]
+┖ <b>RAM</b> → {virtual_memory().percent}% | <b>UP</b> → {currentTime}
 """
         reply_message = await send_message(message, msg)
         await auto_delete_message(message, reply_message)
-
     else:
         text = message.text.split()
         if len(text) > 1:
-            user_id = message.from_user.id if text[1] == "me" else int(text[1])
+            if text[1] == "me":
+                user_id = message.from_user.id
+            elif text[1].lstrip("-").isdigit():
+                user_id = int(text[1])
+            else:
+                user_id = 0
         else:
             user_id = 0
             sid = message.chat.id
@@ -177,7 +76,7 @@ async def get_download_status(download):
     eng = download.engine
     speed = (
         download.speed()
-        if eng.startswith(("Pyro", "yt-dlp", "RClone", "Google-API"))
+        if eng.startswith(("WzPyro", "yt-dlp", "RClone", "Google-API"))
         else 0
     )
     return (
@@ -247,8 +146,21 @@ async def status_pages(_, query):
         ):
             dl_speed, seed_speed = await TorrentManager.overall_speed()
 
+        if any(eng == eng_status.STATUS_SABNZBD for _, __, eng in status_results):
+            if not Config.DISABLE_NZB and sabnzbd_client.LOGGED_IN:
+                dl_speed += (
+                    int(
+                        float(
+                            (await sabnzbd_client.get_downloads())["queue"].get(
+                                "kbpersec", "0"
+                            )
+                        )
+                    )
+                    * 1024
+                )
+
         if any(eng == eng_status.STATUS_JD for _, __, eng in status_results):
-            if jdownloader.is_connected:
+            if not Config.DISABLE_JD and jdownloader.is_connected:
                 dl_speed += (
                     await jdownloader.device.downloadcontroller.get_speed_in_bytes()
                 )
@@ -291,17 +203,17 @@ async def status_pages(_, query):
 
         msg = f"""㊂ <b>Tasks Overview</b> :
         
-╭ <b>Download:</b> {tasks["Download"]} | <b>Upload:</b> {tasks["Upload"]}
-┊ <b>Seed:</b> {tasks["Seed"]} | <b>Archive:</b> {tasks["Archive"]}
-┊ <b>Extract:</b> {tasks["Extract"]} | <b>Split:</b> {tasks["Split"]}
-┊ <b>QueueDL:</b> {tasks["QueueDl"]} | <b>QueueUP:</b> {tasks["QueueUp"]}
-┊ <b>Clone:</b> {tasks["Clone"]} | <b>CheckUp:</b> {tasks["CheckUp"]}
-┊ <b>Paused:</b> {tasks["Pause"]} | <b>SamVideo:</b> {tasks["SamVid"]}
-╰ <b>Convert:</b> {tasks["ConvertMedia"]} | <b>FFmpeg:</b> {tasks["FFmpeg"]}
-
-╭ <b>Total Download Speed:</b> {get_readable_file_size(dl_speed)}/s
-┊ <b>Total Upload Speed:</b> {get_readable_file_size(up_speed)}/s
-╰ <b>Total Seeding Speed:</b> {get_readable_file_size(seed_speed)}/s
+┎ <b>Download:</b> {tasks["Download"]} | <b>Upload:</b> {tasks["Upload"]}
+┠ <b>Seed:</b> {tasks["Seed"]} | <b>Archive:</b> {tasks["Archive"]}
+┠ <b>Extract:</b> {tasks["Extract"]} | <b>Split:</b> {tasks["Split"]}
+┠ <b>QueueDL:</b> {tasks["QueueDl"]} | <b>QueueUP:</b> {tasks["QueueUp"]}
+┠ <b>Clone:</b> {tasks["Clone"]} | <b>CheckUp:</b> {tasks["CheckUp"]}
+┠ <b>Paused:</b> {tasks["Pause"]} | <b>SamVideo:</b> {tasks["SamVid"]}
+┞ <b>Convert:</b> {tasks["ConvertMedia"]} | <b>FFmpeg:</b> {tasks["FFmpeg"]}
+│
+┟ <b>Total Download Speed:</b> {get_readable_file_size(dl_speed)}/s
+┠ <b>Total Upload Speed:</b> {get_readable_file_size(up_speed)}/s
+┖ <b>Total Seeding Speed:</b> {get_readable_file_size(seed_speed)}/s
 """
         button = ButtonMaker()
         button.data_button("Back", f"status {data[1]} ref")

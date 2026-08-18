@@ -1,10 +1,9 @@
 from asyncio import sleep
 from secrets import token_hex
-from telegraph.aio import Telegraph
-from telegraph.exceptions import RetryAfterError
 
 from ... import LOGGER
 from ...core.config_manager import Config
+from .telegraph_utils import Telegraph, RetryAfterError
 
 
 class TelegraphHelper:
@@ -74,12 +73,10 @@ class TelegraphHelper:
                     nxt_page += 1
             await self.edit_page(
                 path=path[prev_page],
-                title="WZML-X Torrent Search",
+                title="CineFlow Torrent Search",
                 content=content,
             )
         return
 
 
 telegraph = TelegraphHelper(Config.AUTHOR_NAME, Config.AUTHOR_URL)
-
-print(__name__)

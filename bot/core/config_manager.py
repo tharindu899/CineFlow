@@ -1,43 +1,77 @@
+from ast import literal_eval
 from importlib import import_module
 from os import getenv
+from wz_bin import bin_name
 
 
 class Config:
+    ALLDEBRID_API_KEY = ""
     AS_DOCUMENT = False
     AUTHORIZED_CHATS = ""
     BASE_URL = ""
-    BASE_URL_PORT = 80
     BOT_TOKEN = ""
     HELPER_TOKENS = ""
+    HELPER_STRINGS = ""
+    HELPER_BOT_PROXIES = ""
+    HELPER_USER_PROXIES = ""
     BOT_MAX_TASKS = 0
     BOT_PM = False
     CMD_SUFFIX = ""
-    CUSTOM_BOT_HEADER = "CineFlow"
-    CUSTOM_BOT_HEADER_LINK = "https://t.me/CineFlow_Update"
+    COLORED_BTNS = True
     DEFAULT_LANG = "en"
     DATABASE_URL = ""
     DEFAULT_UPLOAD = "rc"
     DELETE_LINKS = False
+    DEBRID_LINK_API = ""
     DISABLE_TORRENTS = False
     DISABLE_LEECH = False
     DISABLE_BULK = False
     DISABLE_MULTI = False
     DISABLE_SEED = False
     DISABLE_FF_MODE = False
+    DISABLE_MEGA = False
+    DISABLE_JD = True
+    DISABLE_NZB = True
+    DISABLE_RSS = False
+    DISABLE_SEARCH = False
+    DISABLE_YTDLP = False
     EQUAL_SPLITS = False
     EXCLUDED_EXTENSIONS = ""
+    DISABLE_VIDTOOLS = ""
+    DISABLE_MULTI_VIDTOOLS = "trim watermark compress"
+    VIDTOOLS_FAST_MODE = False
+    LIB264_PRESET = "medium"
+    LIB265_PRESET = "medium"
+    HARDSUB_FONT_NAME = "Arial"
+    HARDSUB_FONT_SIZE = ""
+    COMPRESS_BANNER = ""
     FFMPEG_CMDS = {}
     FILELION_API = ""
     MEDIA_STORE = True
     FORCE_SUB_IDS = ""
+    GOFILE_API = ""
+    GOFILE_FOLDER_ID = ""
+    GOFILE_AUTO_CREATE_FOLDER = False
+    PIXELDRAIN_KEY = ""
+    PROTECTED_API = ""
+    BUZZHEAVIER_API = ""
+    DEVUPLOADS_KEY = ""
+    DEVUPLOADS_FOLDER = ""
+    VIKINGFILE_HASH = ""
+    VIKINGFILE_FOLDER = ""
     GDRIVE_ID = ""
-    GD_DESP = "Uploaded by CineFlow"
+    GD_DESP = "Uploaded with CineFlow Bot"
     AUTHOR_NAME = "CineFlow"
     AUTHOR_URL = "https://t.me/CineFlow_Update"
-    DEBRID_LINK_API = ""
     INSTADL_API = ""
     IMDB_TEMPLATE = ""
-    INCOMPLETE_TASK_NOTIFIER = False
+    IMAGES = []
+    IMG_SEARCH = ""
+    IMG_PAGE = 1
+    USE_IMAGES = False
+    IMG_SOURCES = ["wallpaperflare"]
+    INC_TASK_NOTIFY = False
+    INC_TASK_RESUME = False
     INDEX_URL = ""
     IS_TEAM_DRIVE = False
     JD_EMAIL = ""
@@ -51,6 +85,7 @@ class Config:
     RC_DL_LIMIT = 0
     CLONE_LIMIT = 0
     JD_LIMIT = 0
+    NZB_LIMIT = 0
     YTDLP_LIMIT = 0
     PLAYLIST_LIMIT = 0
     LEECH_LIMIT = 0
@@ -60,15 +95,20 @@ class Config:
     LEECH_DUMP_CHAT = ""
     LINKS_LOG_ID = ""
     MIRROR_LOG_ID = ""
-    CLEAN_LOG_MSG = False
     LEECH_PREFIX = ""
     LEECH_CAPTION = ""
     LEECH_SUFFIX = ""
     LEECH_FONT = ""
     LEECH_SPLIT_SIZE = 2097152000
     MEDIA_GROUP = False
-    HYBRID_LEECH = True
+    USE_HYPER = True
     HYPER_THREADS = 0
+    HYPER_PIPELINE = 4
+    HYPER_CHUNK = 512 * 1024
+    CPU_LIMIT = 20
+    THROTTLE_SERVICES = "auto"
+    HYDRA_IP = ""
+    HYDRA_API_KEY = ""
     NAME_SWAP = ""
     OWNER_ID = 0
     QUEUE_ALL = 0
@@ -77,9 +117,10 @@ class Config:
     RCLONE_FLAGS = ""
     RCLONE_PATH = ""
     RCLONE_SERVE_URL = ""
+    SHOW_CLOUD_LINK = True
     RCLONE_SERVE_USER = ""
     RCLONE_SERVE_PASS = ""
-    RCLONE_SERVE_PORT = 8080
+    RCLONE_SERVE_PORT = 8081
     RSS_CHAT = ""
     RSS_DELAY = 600
     RSS_SIZE_LIMIT = 0
@@ -87,7 +128,6 @@ class Config:
     SEARCH_LIMIT = 0
     SEARCH_PLUGINS = []
     SET_COMMANDS = True
-    SHOW_CLOUD_LINK = False
     STATUS_LIMIT = 10
     STATUS_UPDATE_INTERVAL = 15
     STOP_DUPLICATE = False
@@ -104,14 +144,22 @@ class Config:
     USER_MAX_TASKS = 0
     USER_TIME_INTERVAL = 0
     UPLOAD_PATHS = {}
+    DRIVE_CATEGORY_MODE = False
+    DRIVE_CATEGORY_SA = ""
     UPSTREAM_REPO = ""
     UPSTREAM_BRANCH = "master"
-    UPDATE_PKGS = True
+    USENET_SERVERS = []
     USER_SESSION_STRING = ""
-    USER_TRANSMISSION = True
+    TRANSMISSION_MODE = "both"
     USE_SERVICE_ACCOUNTS = False
+    ENABLE_TELEMETRY = True
+    WEB_ACCESS_PASSWORD = ""
     WEB_PINCODE = True
     YT_DLP_OPTIONS = {}
+    YT_DESP = "Uploaded with CineFlow bot"
+    YT_TAGS = ["telegram", "bot", "youtube"]
+    YT_CATEGORY_ID = 22
+    YT_PRIVACY_STATUS = "unlisted"
 
     @classmethod
     def get(cls, key):
@@ -120,6 +168,7 @@ class Config:
     @classmethod
     def set(cls, key, value):
         if hasattr(cls, key):
+            value = cls._convert_env_type(key, value)
             setattr(cls, key, value)
         else:
             raise KeyError(f"{key} is not a valid configuration key.")
@@ -160,6 +209,12 @@ class Config:
                 ]:
                     if value:
                         value = value.strip("/")
+                elif attr == "USENET_SERVERS":
+                    try:
+                        if not value[0].get("host"):
+                            continue
+                    except Exception:
+                        continue
                 setattr(cls, attr, value)
         for key in ["BOT_TOKEN", "OWNER_ID", "TELEGRAM_API", "TELEGRAM_HASH"]:
             value = getattr(cls, key)
@@ -183,17 +238,48 @@ class Config:
         if original_value is None:
             return value
         elif isinstance(original_value, bool):
-            return value.lower() in ("true", "1", "yes")
+            if isinstance(value, bool):
+                return value
+            return str(value).lower() in ("true", "1", "yes")
         elif isinstance(original_value, int):
+            if isinstance(value, int):
+                return value
             try:
                 return int(value)
-            except ValueError:
+            except (ValueError, TypeError):
                 return original_value
         elif isinstance(original_value, float):
+            if isinstance(value, float):
+                return value
             try:
                 return float(value)
-            except ValueError:
+            except (ValueError, TypeError):
                 return original_value
+        elif isinstance(original_value, list):
+            if isinstance(value, list):
+                return value
+            if isinstance(value, str):
+                try:
+                    parsed = literal_eval(value)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (ValueError, SyntaxError):
+                    pass
+                if value.startswith("[") and value.endswith("]"):
+                    return original_value
+                return [v.strip() for v in value.split(",") if v.strip()]
+            return original_value
+        elif isinstance(original_value, dict):
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    parsed = literal_eval(value)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except (ValueError, SyntaxError):
+                    pass
+            return original_value
         return value
 
     @classmethod
@@ -210,6 +296,13 @@ class Config:
                 ]:
                     if value:
                         value = value.strip("/")
+                elif key == "USENET_SERVERS":
+                    try:
+                        if not value[0].get("host"):
+                            value = []
+                    except Exception:
+                        value = []
+                value = cls._convert_env_type(key, value)
                 setattr(cls, key, value)
         for key in ["BOT_TOKEN", "OWNER_ID", "TELEGRAM_API", "TELEGRAM_HASH"]:
             value = getattr(cls, key)
@@ -220,7 +313,8 @@ class Config:
 
 
 class BinConfig:
-    ARIA2_NAME = "intblaster"
-    QBIT_NAME = "tntengine"
-    FFMPEG_NAME = "witchcraft"
-    RCLONE_NAME = "cloudboomer"
+    ARIA2_NAME = bin_name(0)
+    QBIT_NAME = bin_name(1)
+    FFMPEG_NAME = bin_name(2)
+    RCLONE_NAME = bin_name(3)
+    SABNZBD_NAME = bin_name(4)

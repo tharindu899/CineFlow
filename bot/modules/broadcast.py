@@ -18,7 +18,6 @@ bc_cache = {}
 
 
 async def delete_broadcast(bc_id, message):
-    """Delete broadcasted messages based on the broadcast ID."""
     if bc_id not in bc_cache:
         return await send_message(message, "Invalid Broadcast ID!")
 
@@ -42,16 +41,15 @@ async def delete_broadcast(bc_id, message):
     return await edit_message(
         temp_wait,
         f"""⌬  <b><i>Broadcast Deleted Stats :</i></b>
-┊ <b>Total Users:</b> <code>{total}</code>
-┊ <b>Success:</b> <code>{success}</code>
-╰ <b>Failed Attempts:</b> <code>{failed}</code>
+┠ <b>Total Users:</b> <code>{total}</code>
+┠ <b>Success:</b> <code>{success}</code>
+┖ <b>Failed Attempts:</b> <code>{failed}</code>
 
 <b>Broadcast ID:</b> <code>{bc_id}</code>""",
     )
 
 
 async def edit_broadcast(bc_id, message, rply):
-    """Edit broadcasted messages based on the broadcast ID."""
     if bc_id not in bc_cache:
         return await send_message(message, "Invalid Broadcast ID!")
 
@@ -89,9 +87,9 @@ async def edit_broadcast(bc_id, message, rply):
     return await edit_message(
         temp_wait,
         f"""⌬  <b><i>Broadcast Edited Stats :</i></b>
-┊ <b>Total Users:</b> <code>{total}</code>
-┊ <b>Success:</b> <code>{success}</code>
-╰ <b>Failed Attempts:</b> <code>{failed}</code>
+┠ <b>Total Users:</b> <code>{total}</code>
+┠ <b>Success:</b> <code>{success}</code>
+┖ <b>Failed Attempts:</b> <code>{failed}</code>
 
 <b>Broadcast ID:</b> <code>{bc_id}</code>""",
     )
@@ -99,7 +97,6 @@ async def edit_broadcast(bc_id, message, rply):
 
 @new_task
 async def broadcast(_, message):
-    """Handle different broadcast actions: send, edit, delete, or forward."""
     bc_id, forwarded, quietly, deleted, edited = "", False, False, False, False
     if not Config.DATABASE_URL:
         return await send_message(
@@ -155,11 +152,11 @@ async def broadcast(_, message):
     # Broadcasting logic
     start_time = time()
     status = """⌬  <b><i>Broadcast Stats :</i></b>
-┊ <b>Total Users:</b> <code>{t}</code>
-┊ <b>Success:</b> <code>{s}</code>
-┊ <b>Blocked Users:</b> <code>{b}</code>
-┊ <b>Deleted Accounts:</b> <code>{d}</code>
-╰ <b>Unsuccess Attempt:</b> <code>{u}</code>"""
+┠ <b>Total Users:</b> <code>{t}</code>
+┠ <b>Success:</b> <code>{s}</code>
+┠ <b>Blocked Users:</b> <code>{b}</code>
+┠ <b>Deleted Accounts:</b> <code>{d}</code>
+┖ <b>Unsuccess Attempt:</b> <code>{u}</code>"""
     updater = time()
     bc_hash, bc_msgs = token_hex(5), []
     pls_wait = await send_message(message, status.format(t=0, s=0, b=0, d=0, u=0))

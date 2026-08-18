@@ -29,7 +29,30 @@
             --grad: linear-gradient(120deg, var(--purple) 0%, var(--pink) 100%);
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            tap-highlight-color: transparent;
+        }
+
+        html, body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        /* Long-press on rows/labels should never trigger native text-selection
+           or the "search Google for..." popup -- but inputs must stay selectable. */
+        input, textarea {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            -webkit-touch-callout: default;
+        }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -147,7 +170,7 @@
             box-shadow: 0 8px 20px rgba(255, 121, 198, 0.28);
         }
 
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(255, 121, 198, 0.4); }
+        .btn-primary:hover, .btn-primary:active { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(255, 121, 198, 0.4); }
 
         .btn-secondary {
             background: var(--panel-2);
@@ -158,7 +181,7 @@
             border-radius: 0.6rem;
         }
 
-        .btn-secondary:hover { background: var(--line); }
+        .btn-secondary:hover, .btn-secondary:active { background: var(--line); }
 
         /* ---------------- STATS / TOOLBAR ---------------- */
         .stats-row {
@@ -195,7 +218,7 @@
             transition: background 0.15s, border-color 0.15s;
         }
 
-        .pill-btn:hover { background: var(--line); }
+        .pill-btn:hover, .pill-btn:active { background: var(--line); }
         .pill-btn i.all { color: var(--green); }
         .pill-btn i.inv { color: var(--yellow); }
         .pill-btn i.every { color: var(--purple); }
@@ -238,6 +261,7 @@
         }
 
         .file-tree-item:hover { background: var(--panel-2); }
+        .file-tree-item:active { background: var(--panel-2); }
         .file-tree-item.folder-row { cursor: pointer; }
 
         /* Horizontal stub connecting the row to the vertical guide line. */
@@ -264,7 +288,7 @@
         }
 
         .tree-toggle.clickable { cursor: pointer; }
-        .tree-toggle.clickable:hover { color: var(--purple); }
+        .tree-toggle.clickable:hover, .tree-toggle.clickable:active { color: var(--purple); }
         .tree-toggle.expanded { transform: rotate(90deg); }
 
         .checkbox-wrapper { flex-shrink: 0; display: flex; align-items: center; }
@@ -329,7 +353,7 @@
         .size-info { font-size: 0.62rem; color: var(--comment); margin-top: 0.15rem; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 
         .edit-btn { background: none; border: none; cursor: pointer; font-size: 0.68rem; color: var(--purple); padding: 0; }
-        .edit-btn:hover { text-decoration: underline; }
+        .edit-btn:hover, .edit-btn:active { text-decoration: underline; }
 
         .progress-track {
             flex-grow: 1;
@@ -368,7 +392,7 @@
             transition: transform 0.15s ease;
         }
 
-        .confirm-fab:hover { transform: translateY(-2px) scale(1.02); }
+        .confirm-fab:hover, .confirm-fab:active { transform: translateY(-2px) scale(1.02); }
         .confirm-fab .badge { background: rgba(30, 31, 41, 0.35); border-radius: 999px; padding: 0.1rem 0.45rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
 
         /* ---------------- MODAL ---------------- */
@@ -411,6 +435,22 @@
 
         .modal-footer-row { display: flex; gap: 0.5rem; margin-top: 1rem; }
         .modal-footer-row .btn-primary, .modal-footer-row .btn-secondary { width: auto; flex: 1; }
+
+        .result-icon {
+            width: 64px; height: 64px;
+            margin: 0.25rem auto 1rem;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.6rem;
+            border: 2px solid var(--line);
+        }
+        .result-icon.success { color: var(--green); border-color: var(--green); background: rgba(80, 250, 123, 0.12); box-shadow: 0 0 22px rgba(80, 250, 123, 0.35); }
+        .result-icon.error { color: var(--red); border-color: var(--red); background: rgba(255, 85, 85, 0.12); box-shadow: 0 0 22px rgba(255, 85, 85, 0.35); }
+        .modal-content.result-modal { text-align: center; }
+        .modal-content.result-modal h2 { font-size: 1.15rem; }
+        .result-count { color: var(--purple); font-weight: 700; margin: 0 0 0.6rem; }
+        .modal-content.result-modal p { margin-bottom: 0.4rem; }
+        .result-note { font-style: italic; opacity: 0.8; }
 
         .pin-entry.fadeOut { animation: fadeOut 0.4s forwards; }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
@@ -476,7 +516,7 @@
     </footer>
 
     <div id="reusableModal" class="modal">
-        <div class="modal-content">
+        <div id="modalContent" class="modal-content">
             <h2 id="modalTitle"></h2>
             <div id="modalBody"></div>
             <div id="modalFooter" class="mt-4"></div>
@@ -498,6 +538,7 @@
         const confirmFabWrap = document.getElementById('confirmFabWrap');
         const fabCount = document.getElementById('fabCount');
         const reusableModal = document.getElementById('reusableModal');
+        const modalContent = document.getElementById('modalContent');
         const modalTitle = document.getElementById('modalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalFooter = document.getElementById('modalFooter');
@@ -875,7 +916,59 @@
         }
 
         function openModal() { reusableModal.style.display = 'block'; }
-        function closeModal() { reusableModal.style.display = 'none'; }
+        function closeModal() { reusableModal.style.display = 'none'; modalContent.classList.remove('result-modal'); }
+
+        let autoCloseTimer = null;
+
+        function closeBrowserTab() {
+            if (autoCloseTimer) { clearInterval(autoCloseTimer); autoCloseTimer = null; }
+            window.close();
+            // Some browsers refuse to script-close a tab that wasn't opened by script.
+            // If we're still here shortly after, let the user know it's safe to close manually.
+            setTimeout(() => {
+                const noteEl = document.getElementById('closeCountdownNote');
+                if (noteEl) noteEl.innerHTML = 'You can close this tab now.';
+            }, 300);
+        }
+
+        function startAutoCloseCountdown(seconds) {
+            let remaining = seconds;
+            if (autoCloseTimer) clearInterval(autoCloseTimer);
+            autoCloseTimer = setInterval(() => {
+                remaining -= 1;
+                const noteEl = document.getElementById('closeCountdownNote');
+                if (remaining > 0) {
+                    if (noteEl) noteEl.innerHTML = `This page will close in <b>${remaining}s</b>...`;
+                } else {
+                    clearInterval(autoCloseTimer);
+                    autoCloseTimer = null;
+                    closeBrowserTab();
+                }
+            }, 1000);
+        }
+
+        function showSubmissionResult(success, fileCount) {
+            modalContent.classList.add('result-modal');
+            if (success) {
+                modalTitle.textContent = 'Selection Submitted';
+                modalBody.innerHTML = `
+                    <div class="result-icon success"><i class="fa-solid fa-check"></i></div>
+                    <p class="result-count">${fileCount} files selected</p>
+                    <p>Your file selection has been saved.</p>
+                    <p class="result-note">Head back to Telegram &mdash; your download will start shortly.</p>
+                    <p class="result-note" id="closeCountdownNote">This page will close in <b>5s</b>...</p>`;
+                modalFooter.innerHTML = '<button class="btn btn-primary" onclick="closeBrowserTab()"><i class="fa-solid fa-xmark"></i> Close Now</button>';
+                openModal();
+                startAutoCloseCountdown(5);
+            } else {
+                modalTitle.textContent = 'Error';
+                modalBody.innerHTML = `
+                    <div class="result-icon error"><i class="fa-solid fa-xmark"></i></div>
+                    <p>An error occurred while submitting your selection. Try again!</p>`;
+                modalFooter.innerHTML = '<button class="btn btn-primary" onclick="closeModal()">Okay</button>';
+                openModal();
+            }
+        }
 
         function submitData() {
             if (parseInt(selectedCount.innerText) === 0) {
@@ -885,22 +978,23 @@
                 openModal();
                 return;
             }
-            modalTitle.textContent = 'Processing...';
-            modalBody.innerHTML = `<p>Submitting ${selectedCount.innerText} file(s)...</p>`;
+            const fileCount = selectedCount.innerText;
+            modalTitle.textContent = 'Submitting Selection';
+            modalBody.innerHTML = `
+                <div class="result-icon success"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                <p class="result-count">${fileCount} files selected</p>
+                <p>Processing your file selection...</p>
+                <p class="result-note">Large MEGA folders can take a few seconds -- please wait.</p>`;
+            modalContent.classList.add('result-modal');
             modalFooter.innerHTML = '';
             openModal();
             const requestUrl = `/app/files/torrent?gid=${urlParams.gid}&pin=${pinInput.value}&mode=selection`;
             fetch(requestUrl, { method: 'POST', body: JSON.stringify(files) }).then(response => {
                 if (reusableModal.style.display === 'block') closeModal();
-                if (response.ok) {
-                    modalTitle.textContent = 'Success!';
-                    modalBody.innerHTML = '<p>Your selection has been submitted successfully.</p>';
-                } else {
-                    modalTitle.textContent = 'Error';
-                    modalBody.innerHTML = '<p>An error occurred while submitting your selection. Try again!</p>';
-                }
-                modalFooter.innerHTML = '<button class="btn btn-primary" onclick="closeModal()">Okay</button>';
-                openModal();
+                showSubmissionResult(response.ok, fileCount);
+            }).catch(() => {
+                if (reusableModal.style.display === 'block') closeModal();
+                showSubmissionResult(false, fileCount);
             });
         }
 

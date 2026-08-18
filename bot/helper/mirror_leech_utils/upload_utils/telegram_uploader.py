@@ -1,4 +1,4 @@
-from asyncio import sleep
+from asyncio import ensure_future, gather, sleep
 from logging import getLogger
 from os import path as ospath, walk
 from re import match as re_match, sub as re_sub
@@ -6,13 +6,15 @@ from time import time
 
 from aioshutil import rmtree
 from natsort import natsorted
-from PIL import Image
-from pyrogram.errors import BadRequest, FloodWait, RPCError
+from pyrogram import StopTransmission
+from pyrogram.enums import ChatType
+from pyrogram.errors import FloodWait, RPCError
 
 try:
     from pyrogram.errors import FloodPremiumWait
 except ImportError:
     FloodPremiumWait = FloodWait
+
 from aiofiles.os import (
     path as aiopath,
     remove,
@@ -22,13 +24,7 @@ from pyrogram.types import (
     InputMediaDocument,
     InputMediaPhoto,
     InputMediaVideo,
-)
-from tenacity import (
-    RetryError,
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
+    ReplyParameters,
 )
 
 from ....core.config_manager import Config
@@ -36,26 +32,28 @@ from ....core.tg_client import TgClient
 from ...ext_utils.bot_utils import sync_to_async
 from ...ext_utils.files_utils import get_base_name, is_archive
 from ...ext_utils.status_utils import get_readable_file_size, get_readable_time
-from ...ext_utils.media_utils import (
-    get_audio_thumbnail,
-    get_document_type,
-    get_media_info,
-    get_multiple_frames_thumbnail,
-    get_video_thumbnail,
-    get_md5_hash,
-)
+
+from ...ext_utils.media_utils import get_md5_hash, get_media_info
 from ...telegram_helper.message_utils import delete_message
+from ...ext_utils.hyperul_utils import HypertgUpload
 
 LOGGER = getLogger(__name__)
 
 
+async def _call_with_flood_retry(method, *args, **kwargs):
+    while True:
+        try:
+            return await method(*args, **kwargs)
+        except (FloodWait, FloodPremiumWait) as f:
+            LOGGER.warning(f"FloodWait {f.value}s, retrying {method.__name__}")
+            await sleep(f.value + 1)
+
+
 class TelegramUploader:
     def __init__(self, listener, path):
-        self._last_uploaded = 0
         self._processed_bytes = 0
         self._listener = listener
         self._path = path
-        self._client = None
         self._start_time = time()
         self._total_files = 0
         self._thumb = self._listener.thumb or f"thumbnails/{listener.user_id}.jpg"
@@ -64,7 +62,6 @@ class TelegramUploader:
         self._is_corrupted = False
         self._media_dict = {"videos": {}, "documents": {}}
         self._last_msg_in_group = False
-        self._up_path = ""
         self._lprefix = ""
         self._lsuffix = ""
         self._lcaption = ""
@@ -73,19 +70,11 @@ class TelegramUploader:
         self._media_group = False
         self._is_private = False
         self._sent_msg = None
-        self._log_msg = None
-        self._user_session = self._listener.user_transmission
+        self._user_session = self._listener.transmission_mode in ("user", "both")
+        self._hu: HypertgUpload | None = None
         self._error = ""
-
-    async def _upload_progress(self, current, _):
-        if self._listener.is_cancelled:
-            if self._user_session:
-                TgClient.user.stop_transmission()
-            else:
-                self._listener.client.stop_transmission()
-        chunk_size = current - self._last_uploaded
-        self._last_uploaded = current
-        self._processed_bytes += chunk_size
+        self._upload_seq = []
+        self._msg_to_seq = {}
 
     async def _user_settings(self):
         settings_map = {
@@ -108,78 +97,70 @@ class TelegramUploader:
             self._thumb = None
 
     async def _msg_to_reply(self):
-        if self._listener.up_dest:
-            msg_link = (
-                self._listener.message.link if self._listener.is_super_chat else ""
-            )
-            msg = f"""➲ <b><u>Leech Started :</u></b>
-┃
-┊ <b>User :</b> {self._listener.user.mention} ( #ID{self._listener.user_id} ){f"\n┊ <b>Message Link :</b> <a href='{msg_link}'>Click Here</a>" if msg_link else ""}
-╰ <b>Source :</b> <a href='{self._listener.source_url}'>Click Here</a>"""
-            try:
-                self._log_msg = await TgClient.bot.send_message(
-                    chat_id=self._listener.up_dest,
-                    text=msg,
-                    disable_web_page_preview=True,
-                    message_thread_id=self._listener.chat_thread_id,
-                    disable_notification=True,
-                )
-                self._sent_msg = self._log_msg
-                if self._user_session:
-                    self._sent_msg = await TgClient.user.get_messages(
-                        chat_id=self._sent_msg.chat.id,
-                        message_ids=self._sent_msg.id,
-                    )
-                else:
-                    self._is_private = self._sent_msg.chat.type.name == "PRIVATE"
-            except Exception as e:
-                await self._listener.on_upload_error(str(e))
-                return False
+        if self._user_session and TgClient.user is None:
+            self._user_session = False
 
-        elif self._user_session:
-            self._sent_msg = await TgClient.user.get_messages(
-                chat_id=self._listener.message.chat.id, message_ids=self._listener.mid
-            )
-            if self._sent_msg is None:
-                self._sent_msg = await TgClient.user.send_message(
+        if self._user_session:
+            try:
+                self._sent_msg = await _call_with_flood_retry(
+                    self._listener.client.get_messages,
                     chat_id=self._listener.message.chat.id,
-                    text="Deleted Cmd Message! Don't delete the cmd message again!",
-                    disable_web_page_preview=True,
-                    disable_notification=True,
+                    message_ids=self._listener.mid,
                 )
+            except Exception:
+                self._sent_msg = None
+            if self._sent_msg is None or self._sent_msg.chat is None:
+                try:
+                    self._sent_msg = await _call_with_flood_retry(
+                        self._listener.client.send_message,
+                        chat_id=self._listener.message.chat.id,
+                        text="Deleted Cmd Message! Don't delete the cmd message again!",
+                        disable_web_page_preview=True,
+                        disable_notification=True,
+                    )
+                except Exception:
+                    self._sent_msg = self._listener.message
+            if self._sent_msg is None or self._sent_msg.chat is None:
+                self._sent_msg = self._listener.message
+            self._is_private = self._sent_msg.chat.type == ChatType.PRIVATE
         else:
             self._sent_msg = self._listener.message
+            self._is_private = self._sent_msg.chat.type == ChatType.PRIVATE
+
         return True
 
     async def _prepare_file(self, pre_file_, dirpath):
         cap_file_ = file_ = pre_file_
+        lprefix = self._lprefix
+        lsuffix = self._lsuffix
+        lcaption = self._lcaption
 
-        if self._lprefix:
-            cap_file_ = self._lprefix.replace(r"\s", " ") + file_
-            self._lprefix = re_sub(r"<.*?>", "", self._lprefix).replace(r"\s", " ")
-            if not file_.startswith(self._lprefix):
-                file_ = f"{self._lprefix}{file_}"
+        if lprefix:
+            cap_file_ = lprefix.replace(r"\s", " ") + file_
+            lprefix = re_sub(r"<.*?>", "", lprefix).replace(r"\s", " ")
+            if not file_.startswith(lprefix):
+                file_ = f"{lprefix}{file_}"
 
-        if self._lsuffix:
+        if lsuffix:
             name, ext = ospath.splitext(cap_file_)
-            cap_file_ = name + self._lsuffix.replace(r"\s", " ") + ext
-            self._lsuffix = re_sub(r"<.*?>", "", self._lsuffix).replace(r"\s", " ")
+            cap_file_ = name + lsuffix.replace(r"\s", " ") + ext
+            lsuffix = re_sub(r"<.*?>", "", lsuffix).replace(r"\s", " ")
 
         cap_mono = (
             f"<{Config.LEECH_FONT}>{cap_file_}</{Config.LEECH_FONT}>"
             if Config.LEECH_FONT
             else cap_file_
         )
-        if self._lcaption:
-            self._lcaption = re_sub(
+        if lcaption:
+            lcaption = re_sub(
                 r"(\\\||\\\{|\\\}|\\s)",
                 lambda m: {r"\|": "%%", r"\{": "&%&", r"\}": "$%$", r"\s": " "}[
                     m.group(0)
                 ],
-                self._lcaption,
+                lcaption,
             )
 
-            parts = self._lcaption.split("|")
+            parts = lcaption.split("|")
             parts[0] = re_sub(
                 r"\{([^}]+)\}", lambda m: f"{{{m.group(1).lower()}}}", parts[0]
             )
@@ -211,7 +192,7 @@ class TelegramUploader:
                 cap_mono,
             )
 
-        if len(file_) > 56:
+        if len(file_) > 60:
             if is_archive(file_):
                 name = get_base_name(file_)
                 ext = file_.split(name, 1)[1]
@@ -224,31 +205,30 @@ class TelegramUploader:
             else:
                 name = file_
                 ext = ""
-            if self._lsuffix:
-                ext = f"{self._lsuffix}{ext}"
-            name = name[: 56 - len(ext)]
+            if lsuffix:
+                ext = f"{lsuffix}{ext}"
+            name = name[: 64 - len(ext)]
             file_ = f"{name}{ext}"
-        elif self._lsuffix:
+        elif lsuffix:
             name, ext = ospath.splitext(file_)
-            file_ = f"{name}{self._lsuffix}{ext}"
+            file_ = f"{name}{lsuffix}{ext}"
 
-        if pre_file_ != file_:
-            new_path = ospath.join(dirpath, file_)
-            await rename(self._up_path, new_path)
-            self._up_path = new_path
+        old_path = ospath.join(dirpath, pre_file_)
+        new_path = ospath.join(dirpath, file_)
+        if old_path != new_path:
+            await rename(old_path, new_path)
 
-        return cap_mono
+        return new_path, cap_mono
 
     def _get_input_media(self, subkey, key):
         rlist = []
         for msg in self._media_dict[key][subkey]:
+            caption = msg.caption.html if msg.caption else None
             if key == "videos":
-                input_media = InputMediaVideo(
-                    media=msg.video.file_id, caption=msg.caption
-                )
+                input_media = InputMediaVideo(media=msg.video.file_id, caption=caption)
             else:
                 input_media = InputMediaDocument(
-                    media=msg.document.file_id, caption=msg.caption
+                    media=msg.document.file_id, caption=caption
                 )
             rlist.append(input_media)
         return rlist
@@ -261,48 +241,81 @@ class TelegramUploader:
         for i in range(0, len(inputs), 10):
             batch = inputs[i : i + 10]
             if Config.BOT_PM:
-                await TgClient.bot.send_media_group(
+                await _call_with_flood_retry(
+                    TgClient.bot.send_media_group,
                     chat_id=self._listener.user_id,
                     media=batch,
                     disable_notification=True,
                 )
             self._sent_msg = (
-                await self._sent_msg.reply_media_group(
+                await _call_with_flood_retry(
+                    self._sent_msg.reply_media_group,
                     media=batch,
-                    quote=True,
+                    reply_parameters=ReplyParameters(message_id=self._sent_msg.id),
                     disable_notification=True,
                 )
             )[-1]
 
     async def _send_media_group(self, subkey, key, msgs):
+        old_ids = [(msg[0], msg[1]) for msg in msgs]
         for index, msg in enumerate(msgs):
-            if self._listener.hybrid_leech or not self._user_session:
-                msgs[index] = await self._listener.client.get_messages(
-                    chat_id=msg[0], message_ids=msg[1]
+            if self._listener.transmission_mode == "both" or not self._user_session:
+                msgs[index] = await _call_with_flood_retry(
+                    self._listener.client.get_messages,
+                    chat_id=msg[0],
+                    message_ids=msg[1],
                 )
             else:
-                msgs[index] = await TgClient.user.get_messages(
-                    chat_id=msg[0], message_ids=msg[1]
+                msgs[index] = await _call_with_flood_retry(
+                    TgClient.user.get_messages, chat_id=msg[0], message_ids=msg[1]
                 )
-        msgs_list = await msgs[0].reply_to_message.reply_media_group(
-            media=self._get_input_media(subkey, key),
-            quote=True,
-            disable_notification=True,
-        )
+        media = self._get_input_media(subkey, key)
+        del self._media_dict[key][subkey]
+        if reply_target := msgs[0].reply_to_message:
+            msgs_list = await _call_with_flood_retry(
+                reply_target.reply_media_group,
+                media=media,
+                reply_parameters=ReplyParameters(message_id=reply_target.id),
+                disable_notification=True,
+            )
+        else:
+            msgs_list = await _call_with_flood_retry(
+                (
+                    self._listener.client
+                    if self._listener.transmission_mode == "both"
+                    or not self._user_session
+                    else TgClient.user
+                ).send_media_group,
+                chat_id=msgs[0].chat.id,
+                media=media,
+                disable_notification=True,
+            )
         for msg in msgs:
             if msg.link in self._msgs_dict:
                 del self._msgs_dict[msg.link]
             await delete_message(msg)
-        del self._media_dict[key][subkey]
         if self._listener.is_super_chat or self._listener.up_dest:
             for m in msgs_list:
                 self._msgs_dict[m.link] = m.caption
+        for i, (old_cid, old_mid) in enumerate(old_ids):
+            old_key = (old_cid, old_mid)
+            if old_key in self._msg_to_seq:
+                seq_idx = self._msg_to_seq.pop(old_key)
+                new_msg = msgs_list[i]
+                self._upload_seq[seq_idx] = {
+                    "chat_id": new_msg.chat.id,
+                    "msg_id": new_msg.id,
+                    "link": new_msg.link,
+                    "file_": self._upload_seq[seq_idx]["file_"],
+                }
+                self._msg_to_seq[(new_msg.chat.id, new_msg.id)] = seq_idx
         self._sent_msg = msgs_list[-1]
 
     async def _copy_media(self):
         try:
             if self._bot_pm:
-                await TgClient.bot.copy_message(
+                await _call_with_flood_retry(
+                    TgClient.bot.copy_message,
                     chat_id=self._listener.user_id,
                     from_chat_id=self._sent_msg.chat.id,
                     message_id=self._sent_msg.id,
@@ -312,14 +325,140 @@ class TelegramUploader:
                 )
         except Exception as err:
             if not self._listener.is_cancelled:
-                LOGGER.error(f"Failed To Send in BotPM:\n{str(err)}")
+                err_msg = str(err)
+                if "Can't copy" in err_msg:
+                    LOGGER.warning(
+                        f"BotPM copy skipped (restricted content): {err_msg}"
+                    )
+                else:
+                    LOGGER.error(f"Failed To Send in BotPM:\n{err_msg}")
+
+    async def _sequence_copies(self, src_chat):
+        for entry in self._upload_seq:
+            if entry is None:
+                continue
+            chat_id = entry["chat_id"]
+            msg_id = entry["msg_id"]
+            copy_from_chat = chat_id
+            copy_from_msg = msg_id
+            in_dump = chat_id != src_chat.id and not self._listener.up_dest
+            if in_dump:
+                try:
+                    bot_copy = await _call_with_flood_retry(
+                        TgClient.bot.copy_message,
+                        chat_id=src_chat.id,
+                        from_chat_id=chat_id,
+                        message_id=msg_id,
+                    )
+                    copy_from_chat = src_chat.id
+                    copy_from_msg = bot_copy.id
+                    entry["chat_id"] = src_chat.id
+                    entry["msg_id"] = bot_copy.id
+                    entry["link"] = bot_copy.link
+                except Exception as e:
+                    LOGGER.error(f"Failed to copy from dump_chat: {e}")
+                    continue
+            elif chat_id == src_chat.id and self._user_session and not self._is_private:
+                try:
+                    bot_copy = await _call_with_flood_retry(
+                        TgClient.bot.copy_message,
+                        chat_id=src_chat.id,
+                        from_chat_id=src_chat.id,
+                        message_id=msg_id,
+                    )
+                    copy_from_chat = src_chat.id
+                    copy_from_msg = bot_copy.id
+                    entry["chat_id"] = src_chat.id
+                    entry["msg_id"] = bot_copy.id
+                    entry["link"] = bot_copy.link
+                    try:
+                        await TgClient.bot.delete_messages(
+                            chat_id=chat_id, message_ids=msg_id
+                        )
+                    except Exception:
+                        LOGGER.warning(
+                            "Delete Permission not given. "
+                            "Bot can't delete ghost mode original."
+                        )
+                except Exception as e:
+                    LOGGER.error(
+                        f"Failed to copy for ghost mode. "
+                        f"Make sure bot has message delete permission: {e}"
+                    )
+                    continue
+            if self._bot_pm:
+                try:
+                    await _call_with_flood_retry(
+                        TgClient.bot.copy_message,
+                        chat_id=self._listener.user_id,
+                        from_chat_id=copy_from_chat,
+                        message_id=copy_from_msg,
+                        reply_to_message_id=(
+                            self._listener.pm_msg.id if self._listener.pm_msg else None
+                        ),
+                    )
+                except Exception as err:
+                    if not self._listener.is_cancelled:
+                        err_msg = str(err)
+                        if "Can't copy" in err_msg:
+                            LOGGER.warning(
+                                f"BotPM copy skipped (restricted content): {err_msg}"
+                            )
+                        else:
+                            LOGGER.error(f"Failed To Send in BotPM:\n{err_msg}")
+            for dest_attr in ("cmd_up_dest", "leech_dest"):
+                dest = getattr(self._listener, dest_attr, None)
+                if not dest or dest == self._listener.up_dest:
+                    continue
+                if not isinstance(dest, int):
+                    if "|" in str(dest):
+                        dest, _ = str(dest).split("|", 1)
+                    if str(dest).lstrip("-").isdigit():
+                        dest = int(dest)
+                try:
+                    await _call_with_flood_retry(
+                        TgClient.bot.copy_message,
+                        chat_id=dest,
+                        from_chat_id=copy_from_chat,
+                        message_id=copy_from_msg,
+                    )
+                except Exception as e:
+                    if not self._listener.is_cancelled:
+                        LOGGER.error(f"Failed to forward to {dest_attr}: {e}")
+
+    async def _upload_file_task(self, file_, f_path, dirpath, user_session, seq_idx):
+        up_path = None
+        try:
+            up_path, cap_mono = await self._prepare_file(file_, dirpath)
+            sent = await self._upload_file(
+                cap_mono, up_path, file_, seq_idx, user_session=user_session
+            )
+            if sent and not self._is_corrupted:
+                if self._listener.is_super_chat or self._listener.up_dest:
+                    if not self._is_private:
+                        entry = self._upload_seq[seq_idx]
+                        if entry["msg_id"] == sent.id:
+                            self._msgs_dict[sent.link] = file_
+            return sent
+        except StopTransmission:
+            return None
+        except Exception as err:
+            LOGGER.error(f"{err}. Path: {f_path}", exc_info=True)
+            self._error = str(err)
+            self._corrupted += 1
+            return None
+        finally:
+            path_to_clean = up_path or f_path
+            if not self._listener.is_cancelled and await aiopath.exists(path_to_clean):
+                await remove(path_to_clean)
 
     async def upload(self):
         await self._user_settings()
         res = await self._msg_to_reply()
         if not res:
             return
-        is_log_del = False
+        upload_tasks = []
+        seq_idx = 0
         for dirpath, _, files in natsorted(await sync_to_async(walk, self._path)):
             if dirpath.strip().endswith("/yt-dlp-thumb"):
                 continue
@@ -329,22 +468,21 @@ class TelegramUploader:
                 continue
             for file_ in natsorted(files):
                 self._error = ""
-                self._up_path = f_path = ospath.join(dirpath, file_)
-                if not await aiopath.exists(self._up_path):
-                    LOGGER.error(f"{self._up_path} not exists! Continue uploading!")
+                f_path = ospath.join(dirpath, file_)
+                if not await aiopath.exists(f_path):
+                    LOGGER.error(f"{f_path} not exists! Continue uploading!")
                     continue
                 try:
-                    f_size = await aiopath.getsize(self._up_path)
+                    f_size = await aiopath.getsize(f_path)
                     self._total_files += 1
                     if f_size == 0:
-                        LOGGER.error(
-                            f"{self._up_path} size is zero, telegram don't upload zero size files"
-                        )
+                        LOGGER.warning(f"{f_path} size is zero, skipping")
                         self._corrupted += 1
+                        if not self._listener.is_cancelled:
+                            await remove(f_path)
                         continue
                     if self._listener.is_cancelled:
                         return
-                    cap_mono = await self._prepare_file(file_, dirpath)
                     if self._last_msg_in_group:
                         group_lists = [
                             x for v in self._media_dict.values() for x in v.keys()
@@ -355,48 +493,39 @@ class TelegramUploader:
                                 for subkey, msgs in list(value.items()):
                                     if len(msgs) > 1:
                                         await self._send_media_group(subkey, key, msgs)
-                    if self._listener.hybrid_leech and self._listener.user_transmission:
+                    if self._listener.transmission_mode == "both":
                         self._user_session = f_size > 2097152000
-                        if self._user_session:
-                            self._sent_msg = await TgClient.user.get_messages(
-                                chat_id=self._sent_msg.chat.id,
-                                message_ids=self._sent_msg.id,
-                            )
-                        else:
-                            self._sent_msg = await self._listener.client.get_messages(
-                                chat_id=self._sent_msg.chat.id,
-                                message_ids=self._sent_msg.id,
-                            )
+                    elif (
+                        not self._user_session
+                        and f_size > 2097152000
+                        and TgClient.user is not None
+                    ):
+                        self._user_session = True
                     self._last_msg_in_group = False
-                    self._last_uploaded = 0
-                    await self._upload_file(cap_mono, file_, f_path)
-                    if self._log_msg and not is_log_del and Config.CLEAN_LOG_MSG:
-                        await delete_message(self._log_msg)
-                        is_log_del = True
+                    self._upload_seq.append(None)
+                    task = ensure_future(
+                        self._upload_file_task(
+                            file_, f_path, dirpath, self._user_session, seq_idx
+                        )
+                    )
+                    upload_tasks.append(task)
+                    if not Config.USE_HYPER:
+                        await task
+                    seq_idx += 1
                     if self._listener.is_cancelled:
                         return
-                    if (
-                        not self._is_corrupted
-                        and (self._listener.is_super_chat or self._listener.up_dest)
-                        and not self._is_private
-                    ):
-                        self._msgs_dict[self._sent_msg.link] = file_
-                    await sleep(1)
                 except Exception as err:
-                    if isinstance(err, RetryError):
-                        LOGGER.info(
-                            f"Total Attempts: {err.last_attempt.attempt_number}"
-                        )
-                        err = err.last_attempt.exception()
-                    LOGGER.error(f"{err}. Path: {self._up_path}", exc_info=True)
+                    LOGGER.error(f"{err}. Path: {f_path}", exc_info=True)
                     self._error = str(err)
                     self._corrupted += 1
                     if self._listener.is_cancelled:
                         return
-                if not self._listener.is_cancelled and await aiopath.exists(
-                    self._up_path
-                ):
-                    await remove(self._up_path)
+        if upload_tasks:
+            results = await gather(*upload_tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    LOGGER.error(f"Upload task error: {r}")
+            await sleep(1)
         for key, value in list(self._media_dict.items()):
             for subkey, msgs in list(value.items()):
                 if len(msgs) > 1:
@@ -406,6 +535,12 @@ class TelegramUploader:
                         LOGGER.info(
                             f"While sending media group at the end of task. Error: {e}"
                         )
+        if self._upload_seq:
+            src_chat = self._listener.message.chat
+            await self._sequence_copies(src_chat)
+            self._msgs_dict = {
+                e["link"]: e["file_"] for e in self._upload_seq if e is not None
+            }
         if self._listener.is_cancelled:
             return
         if self._total_files == 0:
@@ -424,169 +559,83 @@ class TelegramUploader:
         )
         return
 
-    @retry(
-        wait=wait_exponential(multiplier=2, min=4, max=8),
-        stop=stop_after_attempt(3),
-        retry=retry_if_exception_type(Exception),
-    )
-    async def _upload_file(self, cap_mono, file, o_path, force_document=False):
+    async def _upload_file(
+        self, cap_mono, o_path, file_, seq_idx, force_document=False, user_session=False
+    ):
+        if self._sent_msg is None:
+            LOGGER.error("Cannot upload: _sent_msg is None")
+            await self._listener.on_upload_error(
+                "Upload failed: Message not initialized"
+            )
+            return
+
+        if not hasattr(self._sent_msg, "chat") or self._sent_msg.chat is None:
+            LOGGER.error("Cannot upload: _sent_msg.chat is None")
+            await self._listener.on_upload_error(
+                "Upload failed: Invalid message object"
+            )
+            return
+
         if (
             self._thumb is not None
             and not await aiopath.exists(self._thumb)
             and self._thumb != "none"
         ):
             self._thumb = None
-        thumb = self._thumb
         self._is_corrupted = False
         try:
-            is_video, is_audio, is_image = await get_document_type(self._up_path)
+            if self._hu is None:
+                self._hu = HypertgUpload(self)
 
-            if not is_image and thumb is None:
-                file_name = ospath.splitext(file)[0]
-                thumb_path = f"{self._path}/yt-dlp-thumb/{file_name}.jpg"
-                if await aiopath.isfile(thumb_path):
-                    thumb = thumb_path
-                elif is_audio and not is_video:
-                    thumb = await get_audio_thumbnail(self._up_path)
+            sent_msg = await self._hu.upload(
+                file_path=o_path,
+                cap_mono=cap_mono,
+                reply_target=self._sent_msg,
+                reply_to_message_id=self._sent_msg.id,
+                force_document=force_document,
+                user_session=user_session,
+                user_thumb=self._thumb,
+            )
 
-            if (
-                self._listener.as_doc
-                or force_document
-                or (not is_video and not is_audio and not is_image)
-            ):
-                key = "documents"
-                if is_video and thumb is None:
-                    thumb = await get_video_thumbnail(self._up_path, None)
+            if self._listener.is_cancelled:
+                return
 
-                if self._listener.is_cancelled:
-                    return
-                if thumb == "none":
-                    thumb = None
-                self._sent_msg = await self._sent_msg.reply_document(
-                    document=self._up_path,
-                    quote=True,
-                    thumb=thumb,
-                    caption=cap_mono,
-                    force_document=True,
-                    disable_notification=True,
-                    progress=self._upload_progress,
-                )
-            elif is_video:
-                key = "videos"
-                duration = (await get_media_info(self._up_path))[0]
-                if thumb is None and self._listener.thumbnail_layout:
-                    thumb = await get_multiple_frames_thumbnail(
-                        self._up_path,
-                        self._listener.thumbnail_layout,
-                        self._listener.screen_shots,
-                    )
-                if thumb is None:
-                    thumb = await get_video_thumbnail(self._up_path, duration)
-                if thumb is not None and thumb != "none":
-                    with Image.open(thumb) as img:
-                        width, height = img.size
-                else:
-                    width = 480
-                    height = 320
-                if self._listener.is_cancelled:
-                    return
-                if thumb == "none":
-                    thumb = None
-                self._sent_msg = await self._sent_msg.reply_video(
-                    video=self._up_path,
-                    quote=True,
-                    caption=cap_mono,
-                    duration=duration,
-                    width=width,
-                    height=height,
-                    thumb=thumb,
-                    supports_streaming=True,
-                    disable_notification=True,
-                    progress=self._upload_progress,
-                )
-            elif is_audio:
-                key = "audios"
-                duration, artist, title = await get_media_info(self._up_path)
-                if self._listener.is_cancelled:
-                    return
-                if thumb == "none":
-                    thumb = None
-                self._sent_msg = await self._sent_msg.reply_audio(
-                    audio=self._up_path,
-                    quote=True,
-                    caption=cap_mono,
-                    duration=duration,
-                    performer=artist,
-                    title=title,
-                    thumb=thumb,
-                    disable_notification=True,
-                    progress=self._upload_progress,
-                )
-            else:
-                key = "photos"
-                if self._listener.is_cancelled:
-                    return
-                self._sent_msg = await self._sent_msg.reply_photo(
-                    photo=self._up_path,
-                    quote=True,
-                    caption=cap_mono,
-                    disable_notification=True,
-                    progress=self._upload_progress,
-                )
+            self._sent_msg = sent_msg
+
+            self._upload_seq[seq_idx] = {
+                "chat_id": sent_msg.chat.id,
+                "msg_id": sent_msg.id,
+                "link": sent_msg.link,
+                "file_": file_,
+            }
+            self._msg_to_seq[(sent_msg.chat.id, sent_msg.id)] = seq_idx
 
             if (
                 not self._listener.is_cancelled
                 and self._media_group
-                and (self._sent_msg.video or self._sent_msg.document)
+                and (sent_msg.video or sent_msg.document)
             ):
-                key = "documents" if self._sent_msg.document else "videos"
+                key = "documents" if sent_msg.document else "videos"
                 if match := re_match(r".+(?=\.0*\d+$)|.+(?=\.part\d+\..+$)", o_path):
                     pname = match.group(0)
                     if pname in self._media_dict[key].keys():
                         self._media_dict[key][pname].append(
-                            [self._sent_msg.chat.id, self._sent_msg.id]
+                            [sent_msg.chat.id, sent_msg.id]
                         )
                     else:
-                        self._media_dict[key][pname] = [
-                            [self._sent_msg.chat.id, self._sent_msg.id]
-                        ]
+                        self._media_dict[key][pname] = [[sent_msg.chat.id, sent_msg.id]]
                     msgs = self._media_dict[key][pname]
                     if len(msgs) == 10:
                         await self._send_media_group(pname, key, msgs)
                     else:
                         self._last_msg_in_group = True
 
-            if self._sent_msg:
-                await self._copy_media()
-
-            if (
-                self._thumb is None
-                and thumb is not None
-                and await aiopath.exists(thumb)
-            ):
-                await remove(thumb)
-        except (FloodWait, FloodPremiumWait) as f:
-            LOGGER.warning(str(f))
-            await sleep(f.value * 1.3)
-            if (
-                self._thumb is None
-                and thumb is not None
-                and await aiopath.exists(thumb)
-            ):
-                await remove(thumb)
-            return await self._upload_file(cap_mono, file, o_path)
+            return sent_msg
+        except StopTransmission:
+            raise
         except Exception as err:
-            if (
-                self._thumb is None
-                and thumb is not None
-                and await aiopath.exists(thumb)
-            ):
-                await remove(thumb)
             err_type = "RPCError: " if isinstance(err, RPCError) else ""
-            LOGGER.error(f"{err_type}{err}. Path: {self._up_path}", exc_info=True)
-            if isinstance(err, BadRequest) and key != "documents":
-                LOGGER.error(f"Retrying As Document. Path: {self._up_path}")
-                return await self._upload_file(cap_mono, file, o_path, True)
+            LOGGER.error(f"{err_type}{err}. Path: {o_path}", exc_info=True)
             raise err
 
     @property

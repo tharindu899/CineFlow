@@ -4,9 +4,10 @@ from time import time
 from mimetypes import guess_type
 from contextlib import suppress
 from os import path as ospath
+from pyrogram.enums import ButtonStyle
 
 from aiofiles.os import listdir, remove, path as aiopath
-from requests import utils as rutils
+from niquests import utils as rutils
 
 from ... import (
     intervals,
@@ -21,11 +22,13 @@ from ... import (
     same_directory_lock,
     DOWNLOAD_DIR,
 )
+from ...modules.metadata import apply_metadata_title
 from ..common import TaskConfig
 from ...core.tg_client import TgClient
 from ...core.config_manager import Config
 from ...core.torrent_manager import TorrentManager
-from ..ext_utils.bot_utils import encode_slink, sync_to_async
+from ..ext_utils.bot_utils import sync_to_async
+from ..ext_utils.links_utils import encode_slink
 from ..ext_utils.db_handler import database
 from ..ext_utils.files_utils import (
     clean_download,
@@ -39,15 +42,23 @@ from ..ext_utils.files_utils import (
 from ..ext_utils.links_utils import is_gdrive_id
 from ..ext_utils.status_utils import get_readable_file_size, get_readable_time
 from ..ext_utils.task_manager import check_running_tasks, start_from_queued
+from ..mirror_leech_utils.uphoster_utils.multi_upload import MultiUphosterUpload
 from ..mirror_leech_utils.gdrive_utils.upload import GoogleDriveUpload
 from ..mirror_leech_utils.rclone_utils.transfer import RcloneTransferHelper
-from ..mirror_leech_utils.status_utils.gdrive_status import GoogleDriveStatus
+from ..mirror_leech_utils.upload_utils.mega_upload import add_mega_upload
+from ..mirror_leech_utils.status_utils.uphoster_status import UphosterStatus
+from ..mirror_leech_utils.status_utils.gdrive_status import (
+    GoogleDriveStatus,
+)
 from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
 from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
+from ..mirror_leech_utils.status_utils.yt_status import YtStatus
 from ..mirror_leech_utils.upload_utils.telegram_uploader import TelegramUploader
+from ..mirror_leech_utils.youtube_utils.youtube_upload import YouTubeUpload
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
+    delete_links,
     delete_message,
     delete_status,
     send_message,
@@ -90,32 +101,45 @@ class TaskListener(TaskConfig):
             self.pm_msg = await send_message(
                 self.user_id,
                 f"""➲ <b><u>Task Started :</u></b>
-➲ <b>Link:</b> <a href='{self.source_url}'>Click Here</a>
+┃
+┖ <b>Link:</b> <a href='{self.source_url}'>Click Here</a>
 """,
             )
         if Config.LINKS_LOG_ID:
             await send_message(
                 Config.LINKS_LOG_ID,
                 f"""➲  <b><u>{mode_name} Started:</u></b>
- 
- ╭ <b>User :</b> {self.tag} ( #ID{self.user_id} )
- ┊ <b>Message Link :</b> <a href='{self.message.link}'>Click Here</a>
- ╰ <b>Link:</b> <a href='{self.source_url}'>Click Here</a>
+ ┃
+ ┠ <b>User :</b> {self.tag} ( #ID{self.user_id} )
+ ┠ <b>Message Link :</b> <a href='{self.message.link}'>Click Here</a>
+ ┗ <b>Link:</b> <a href='{self.source_url}'>Click Here</a>
  """,
             )
         if (
             self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
+            and (Config.INC_TASK_NOTIFY or Config.INC_TASK_RESUME)
             and Config.DATABASE_URL
         ):
             await database.add_incomplete_task(
-                self.message.chat.id, self.message.link, self.tag
+                self.message.chat.id,
+                self.message.link,
+                self.tag,
+                self.message.text or "",
+                self.user_id,
+                self.message.reply_to_message.id
+                if self.message.reply_to_message
+                else 0,
+                self.dump_msg_id,
             )
 
     async def on_download_complete(self):
         await sleep(2)
         if self.is_cancelled:
             return
+        if self.dump_msg_id and Config.DATABASE_URL:
+            await database.update_task_dump_msg(
+                self.message.link, self.dump_chat, self.dump_msg_id
+            )
         multi_links = False
         if (
             self.folder_name
@@ -205,7 +229,7 @@ class TaskListener(TaskConfig):
         if self.join and not self.is_file:
             await join_files(up_path)
 
-        if self.extract:
+        if self.extract and not self.is_nzb:
             up_path = await self.proceed_extract(up_path, gid)
             if self.is_cancelled:
                 return
@@ -227,6 +251,26 @@ class TaskListener(TaskConfig):
             self.size = await get_path_size(up_dir)
             self.clear()
 
+        if (
+            (hasattr(self, "metadata_dict") and self.metadata_dict)
+            or (hasattr(self, "audio_metadata_dict") and self.audio_metadata_dict)
+            or (hasattr(self, "video_metadata_dict") and self.video_metadata_dict)
+        ):
+            up_path = await apply_metadata_title(
+                self,
+                up_path,
+                gid,
+                getattr(self, "metadata_dict", {}),
+                getattr(self, "audio_metadata_dict", {}),
+                getattr(self, "video_metadata_dict", {}),
+            )
+            if self.is_cancelled:
+                return
+
+            self.name = up_path.replace(f"{up_dir.rstrip('/')}/", "").split("/", 1)[0]
+            self.size = await get_path_size(up_path)
+            self.clear()
+
         if self.is_leech and self.is_file:
             fname = ospath.basename(up_path)
             self.file_details["filename"] = fname
@@ -240,6 +284,15 @@ class TaskListener(TaskConfig):
                 return
             self.is_file = await aiopath.isfile(up_path)
             self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
+
+        if self.vid_mode:
+            up_path = await self.generate_vid_tools(up_path, gid)
+            if self.is_cancelled:
+                return
+            self.is_file = await aiopath.isfile(up_path)
+            self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
+            self.size = await get_path_size(up_dir)
+            self.clear()
 
         if self.screen_shots:
             up_path = await self.generate_screenshots(up_path)
@@ -304,16 +357,46 @@ class TaskListener(TaskConfig):
 
         self.size = await get_path_size(up_dir)
 
-        if self.is_leech:
+        if self.is_yt:
+            LOGGER.info(f"Up to yt Name: {self.name}")
+            yt = YouTubeUpload(self, up_path)
+            async with task_dict_lock:
+                task_dict[self.mid] = YtStatus(self, yt, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                sync_to_async(yt.upload),
+            )
+            del yt
+        elif self.is_leech:
             LOGGER.info(f"Leech Name: {self.name}")
             tg = TelegramUploader(self, up_dir)
             async with task_dict_lock:
-                task_dict[self.mid] = TelegramStatus(self, tg, gid, "up")
+                task_dict[self.mid] = TelegramStatus(
+                    self,
+                    tg,
+                    gid,
+                    "up",
+                    "hul" if Config.USE_HYPER and TgClient.helper_bots else "",
+                )
             await gather(
                 update_status_message(self.message.chat.id),
                 tg.upload(),
             )
             del tg
+        elif self.is_uphoster:
+            LOGGER.info(f"Uphoster Upload Name: {self.name}")
+            uphoster_service = self.user_dict.get("UPHOSTER_SERVICE", "gofile")
+            services = uphoster_service.split(",")
+            ddl = MultiUphosterUpload(
+                self, up_path, services, self.folder_name.strip("/")
+            )
+            async with task_dict_lock:
+                task_dict[self.mid] = UphosterStatus(self, ddl, gid, "up")
+            await gather(
+                update_status_message(self.message.chat.id),
+                ddl.upload(),
+            )
+            del ddl
         elif is_gdrive_id(self.up_dest):
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             drive = GoogleDriveUpload(self, up_path)
@@ -324,6 +407,11 @@ class TaskListener(TaskConfig):
                 sync_to_async(drive.upload),
             )
             del drive
+        elif self.up_dest == "mega:":
+            LOGGER.info(f"Mega Upload Name: {self.name}")
+            mega_email = self.user_dict.get("MEGA_EMAIL") or ""
+            mega_password = self.user_dict.get("MEGA_PASSWORD") or ""
+            await add_mega_upload(self, up_path, mega_email, mega_password, gid)
         else:
             LOGGER.info(f"Rclone Upload Name: {self.name}")
             RCTransfer = RcloneTransferHelper(self)
@@ -341,23 +429,50 @@ class TaskListener(TaskConfig):
     ):
         if (
             self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
+            and (Config.INC_TASK_NOTIFY or Config.INC_TASK_RESUME)
             and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
         msg = (
-            f"<b><i>{escape(self.name)}</i></b>\n"
-            f"\n╭ <b>Task Size</b> → {get_readable_file_size(self.size)}"
-            f"\n┊ <b>Time Taken</b> → {get_readable_time(time() - self.message.date.timestamp())}"
-            f"\n┊ <b>In Mode</b> → {self.mode[0]}"
-            f"\n┊ <b>Out Mode</b> → {self.mode[1]}"
+            f"<b><i>{escape(self.name)}</i></b>\n│"
+            f"\n┟ <b>Task Size</b> → {get_readable_file_size(self.size)}"
+            f"\n┠ <b>Time Taken</b> → {get_readable_time(time() - self.message.date.timestamp())}"
+            f"\n┠ <b>In Mode</b> → {self.mode[0]}"
+            f"\n┠ <b>Out Mode</b> → {self.mode[1]}"
         )
         LOGGER.info(f"Task Done: {self.name}")
-        if self.is_leech:
-            msg += f"\n┊ <b>Total Files</b> → {folders}"
+        if self.is_yt:
+            buttons = ButtonMaker()
+            if mime_type == "Folder/Playlist":
+                msg += "\n┠ <b>Type</b> → Playlist"
+                msg += f"\n┖ <b>Total Videos</b> → {files}"
+                if link:
+                    buttons.url_button(
+                        "🔗 View Playlist", link, style=ButtonStyle.PRIMARY
+                    )
+                user_message = f"{self.tag}\nYour playlist ({files} videos) has been uploaded to YouTube successfully!"
+            else:
+                msg += "\n┖ <b>Type</b> → Video"
+                if link:
+                    buttons.url_button("🔗 View Video", link, style=ButtonStyle.PRIMARY)
+                user_message = (
+                    f"{self.tag}\nYour video has been uploaded to YouTube successfully!"
+                )
+
+            msg += f"\n\n<b>Task By: </b>{self.tag}"
+
+            button = buttons.build_menu(1) if link else None
+
+            await send_message(self.user_id, msg, button)
+            if Config.LEECH_DUMP_CHAT:
+                await send_message(Config.LEECH_DUMP_CHAT, msg, button)
+            await send_message(self.message, user_message, button)
+
+        elif self.is_leech:
+            msg += f"\n┠ <b>Total Files: </b>{folders}"
             if mime_type != 0:
-                msg += f"\n┊ <b>Corrupted Files</b> → {mime_type}"
-            msg += f"\n╰ <b>Task By</b> → {self.tag}\n\n"
+                msg += f"\n┠ <b>Corrupted Files</b> → {mime_type}"
+            msg += f"\n┖ <b>Task By</b> → {self.tag}\n\n"
 
             if self.bot_pm:
                 pmsg = msg
@@ -365,89 +480,120 @@ class TaskListener(TaskConfig):
                 pmsg += "⋗ <i>File(s) have been sent to User PM</i>\n\n"
                 if self.is_super_chat:
                     await send_message(self.message, pmsg)
-            elif not files and not self.is_super_chat:
+
+            if not files and not self.is_super_chat:
                 await send_message(self.message, msg)
             else:
                 log_chat = self.user_id if self.bot_pm else self.message
                 msg += "〶 <b><u>Files List :</u></b>\n"
                 fmsg = ""
                 for index, (link, name) in enumerate(files.items(), start=1):
-                    chat_id, msg_id = link.split("/")[-2:]
                     fmsg += f"{index}. <a href='{link}'>{name}</a>"
+                    if Config.MEDIA_STORE and (
+                        self.is_super_chat or Config.LEECH_DUMP_CHAT
+                    ):
+                        parts = link.split("/")[-2:]
+                        if len(parts) == 2:
+                            chat_id, msg_id = parts
+                            if chat_id.isdigit():
+                                chat_id = f"-100{chat_id}"
+                            flink = f"https://t.me/{TgClient.BNAME}?start={encode_slink('file' + chat_id + '&&' + msg_id)}"
+                            fmsg += f"\n┖ <b>Get Media</b> → <a href='{flink}'>Store Link</a> | <a href='https://t.me/share/url?url={flink}'>Share Link</a>"
+                    fmsg += "\n"
+                    if len(fmsg.encode() + msg.encode()) > 4000:
+                        await send_message(log_chat, msg + fmsg)
+                        await sleep(1)
+                        fmsg = ""
+                if fmsg != "":
+                    await send_message(log_chat, msg + fmsg)
         else:
-            msg += f"\n╰ <b>Type</b> → {mime_type}"
+            msg += f"\n│\n┟ <b>Type</b> → {mime_type}"
             if mime_type == "Folder":
-                msg += f"\n╭ <b>SubFolders</b> → {folders}"
-                msg += f"\n╰ <b>Files</b> → {files}"
+                msg += f"\n┠ <b>SubFolders</b> → {folders}"
+                msg += f"\n┠ <b>Files</b> → {files}"
+
+            multi_link_msg = ""
+            multi_links = []
+            if isinstance(link, dict) and not self.is_yt:
+                for service, result in link.items():
+                    if "error" in result:
+                        multi_link_msg += (
+                            f"{service.capitalize()}: Error - {result['error']}\n"
+                        )
+                    elif result.get("link"):
+                        multi_links.append(
+                            (f"{service.capitalize()} Link", result["link"])
+                        )
+                multi_link_msg = multi_link_msg.strip()
+                link = None
+
             if (
                 link
                 or rclone_path
                 and Config.RCLONE_SERVE_URL
                 and not self.private_link
+                or multi_links
             ):
                 buttons = ButtonMaker()
                 if link and Config.SHOW_CLOUD_LINK:
-                    buttons.url_button("☁️ Cloud Link", link)
+                    if "mega.nz" in link:
+                        btn_label = "🔗 Mega Link"
+                    else:
+                        btn_label = "☁️ Cloud Link"
+                    buttons.url_button(btn_label, link, style=ButtonStyle.PRIMARY)
+                elif multi_links:
+                    for name, url in multi_links:
+                        buttons.url_button(name, url)
                 else:
                     msg += f"\n\nPath: <code>{rclone_path}</code>"
                 if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
                     remote, rpath = rclone_path.split(":", 1)
                     url_path = rutils.quote(f"{rpath}")
-                    share_url = f"{Config.RCLONE_SERVE_URL}/{url_path}"
-                    if mime_type == "Folder" or not share_url.endswith("/"):
-                        share_url = share_url.rstrip("/")
-                    buttons.url_button("🔗 Rclone Link", share_url)
+                    share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
+                    if mime_type == "Folder":
+                        share_url += "/"
+                    buttons.url_button(
+                        "🔗 Rclone Link", share_url, style=ButtonStyle.PRIMARY
+                    )
                 if not rclone_path and dir_id:
-                    INDEX_URL = ""
-                    if self.private_link:
-                        INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
-                    elif Config.INDEX_URL:
-                        INDEX_URL = Config.INDEX_URL
-                    if INDEX_URL:
-                        share_url = f"{INDEX_URL}findpath?id={dir_id}"
-                        buttons.url_button("⚡ Index Link", share_url)
+                    INDEX_URL = self.user_dict.get("INDEX_URL", "") or ""
+                    if not INDEX_URL:
+                        INDEX_URL = Config.INDEX_URL or ""
+                    if INDEX_URL and self.name:
+                        safe_name = rutils.quote(self.name.strip("/"))
+                        share_url = f"{INDEX_URL}/{safe_name}"
+                        if mime_type == "Folder":
+                            share_url += "/"
+                        buttons.url_button(
+                            "⚡ Index Link", share_url, style=ButtonStyle.PRIMARY
+                        )
                         if mime_type.startswith(("image", "video", "audio")):
-                            share_urls = f"{INDEX_URL}findpath?id={dir_id}&view=true"
-                            buttons.url_button("🌐 View Link", share_urls)
+                            share_urls = f"{share_url}?a=view"
+                            buttons.url_button(
+                                "🌐 View Link", share_urls, style=ButtonStyle.PRIMARY
+                            )
                 button = buttons.build_menu(2)
             else:
-                msg += f"\n┊ Path: <code>{rclone_path}</code>"
+                if not multi_link_msg and rclone_path:
+                    msg += f"\n┃\n┠ Path: <code>{rclone_path}</code>"
                 button = None
-
-            complete_msg = f"{msg}\n\n➾ <b>Task By</b> → {self.tag}\n\n"
+            msg += f"\n┃\n┖ <b>Task By</b> → {self.tag}\n\n"
             group_msg = (
-                complete_msg + "〶 <b><u>Action Performed :</u></b>\n"
+                msg + "〶 <b><u>Action Performed :</u></b>\n"
                 "⋗ <i>Cloud link(s) have been sent to User PM</i>\n\n"
             )
 
-            chat_type = self.message.chat.type
-            chat_type_str = str(chat_type)
-            if hasattr(chat_type, "value"):
-                chat_type_str = chat_type.value
-            chat_type_str = chat_type_str.lower()
-            is_private_chat = chat_type_str == "private"
-            is_group_chat = chat_type_str in ("group", "supergroup")
-            if self.bot_pm and is_group_chat:
-                await send_message(self.message, group_msg)
-                await send_message(self.user_id, msg, button)
-            elif self.bot_pm and is_private_chat:
-                await send_message(self.user_id, msg, button)
-            elif not self.bot_pm and is_group_chat:
-                await send_message(self.message, complete_msg, button)
-            elif not self.bot_pm and is_private_chat:
-                await send_message(self.message, msg, button)
-            else:
-                await send_message(self.message, complete_msg, button)
+            if multi_link_msg:
+                group_msg += multi_link_msg + "\n"
+                msg += multi_link_msg + "\n"
 
-            mirror_log_id = getattr(Config, "MIRROR_LOG_ID", None)
-            if mirror_log_id:
-                try:
-                    await send_message(mirror_log_id, complete_msg, button)
-                except Exception as e:
-                    LOGGER.error(
-                        f"[TaskListener] Failed to send to MIRROR_LOG_ID: {mirror_log_id} - {e}"
-                    )
+            if self.bot_pm and self.is_super_chat:
+                await send_message(self.user_id, msg, button)
 
+            if hasattr(Config, "MIRROR_LOG_ID") and Config.MIRROR_LOG_ID:
+                await send_message(Config.MIRROR_LOG_ID, msg, button)
+
+            await send_message(self.message, group_msg, button)
         if self.seed:
             await clean_target(self.up_dir)
             async with queue_dict_lock:
@@ -456,8 +602,10 @@ class TaskListener(TaskConfig):
             await start_from_queued()
             return
 
-        if self.pm_msg and (not Config.DELETE_LINKS or Config.CLEAN_LOG_MSG):
+        if self.pm_msg and not Config.DELETE_LINKS:
             await delete_message(self.pm_msg)
+
+        await delete_links(self.message)
 
         await clean_download(self.dir)
         async with task_dict_lock:
@@ -481,25 +629,33 @@ class TaskListener(TaskConfig):
                 del task_dict[self.mid]
             count = len(task_dict)
         await self.remove_from_same_dir()
+        if magnet_id := getattr(self, "_alldebrid_magnet_id", 0) or 0:
+            from ..mirror_leech_utils.download_utils.alldebrid_resolver import (
+                delete_magnet,
+            )
+
+            await delete_magnet(magnet_id)
+            self._alldebrid_magnet_id = 0
         msg = (
             f"""〶 <b><i><u>Limit Breached:</u></i></b>
-
-╭ <b>Task Size</b> → {get_readable_file_size(self.size)}
-┊ <b>In Mode</b> → {self.mode[0]}
-┊ <b>Out Mode</b> → {self.mode[1]}
+│
+┟ <b>Task Size</b> → {get_readable_file_size(self.size)}
+┠ <b>In Mode</b> → {self.mode[0]}
+┠ <b>Out Mode</b> → {self.mode[1]}
 {error}"""
             if is_limit
             else f"""<i><b>〶 Download Stopped!</b></i>
-
-╭ <b>Due To</b> → {escape(str(error))}
-┊ <b>Task Size</b> → {get_readable_file_size(self.size)}
-┊ <b>Time Taken</b> → {get_readable_time(time() - self.message.date.timestamp())}
-┊ <b>In Mode</b> → {self.mode[0]}
-┊ <b>Out Mode</b> → {self.mode[1]}
-╰ <b>Task By</b> → {self.tag}"""
+│
+┟ <b>Due To</b> → {escape(str(error))}
+┠ <b>Task Size</b> → {get_readable_file_size(self.size)}
+┠ <b>Time Taken</b> → {get_readable_time(time() - self.message.date.timestamp())}
+┠ <b>In Mode</b> → {self.mode[0]}
+┠ <b>Out Mode</b> → {self.mode[1]}
+┖ <b>Task By</b> → {self.tag}"""
         )
 
         await send_message(self.message, msg, button)
+        await delete_links(self.message)
         if count == 0:
             await self.clean()
         else:
@@ -507,7 +663,7 @@ class TaskListener(TaskConfig):
 
         if (
             self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
+            and (Config.INC_TASK_NOTIFY or Config.INC_TASK_RESUME)
             and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
@@ -533,11 +689,13 @@ class TaskListener(TaskConfig):
             await remove(self.thumb)
 
     async def on_upload_error(self, error):
+        self.is_cancelled = True
         async with task_dict_lock:
             if self.mid in task_dict:
                 del task_dict[self.mid]
             count = len(task_dict)
         await send_message(self.message, f"{self.tag} {escape(str(error))}")
+        await delete_links(self.message)
         if count == 0:
             await self.clean()
         else:
@@ -545,7 +703,7 @@ class TaskListener(TaskConfig):
 
         if (
             self.is_super_chat
-            and Config.INCOMPLETE_TASK_NOTIFIER
+            and (Config.INC_TASK_NOTIFY or Config.INC_TASK_RESUME)
             and Config.DATABASE_URL
         ):
             await database.rm_complete_task(self.message.link)
